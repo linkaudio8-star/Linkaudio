@@ -1045,7 +1045,7 @@ function updateLoopButtonState() {
     dom.playLoopKnob.style.transform = scannerState.loopingPlayback ? "translateX(16px)" : "translateX(0px)";
   }
   if (dom.playLoopLabel) {
-    dom.playLoopLabel.textContent = scannerState.loopingPlayback ? "Stop looping" : "Loop in background";
+    dom.playLoopLabel.textContent = "Loop in background";
   }
 }
 
