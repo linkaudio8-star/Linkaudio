@@ -154,8 +154,7 @@ export function renderEncodeHistory({
     const isLoopingThisEntry =
       scannerState.historyLoopEntryId &&
       scannerState.historyLoopEntryId === entry.id &&
-      scannerState.historyLoopAudio &&
-      !scannerState.historyLoopAudio.paused;
+      scannerState.historyLoopAudio;
     const isCurrentEntry = scannerState.currentHistoryEntryId && scannerState.currentHistoryEntryId === entry.id;
 
     const li = document.createElement("li");
@@ -263,12 +262,12 @@ export function renderEncodeHistory({
     loopToggle.setAttribute("aria-pressed", isLoopingThisEntry ? "true" : "false");
     loopToggle.className =
       "mt-4 inline-flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-[#f8f9ff] px-4 py-2 text-left text-xs font-semibold text-slate-600";
-    if (isLoopingThisEntry) {
-      loopToggle.classList.add("border-emerald-200", "bg-emerald-50/40", "text-slate-700");
-    }
+    loopToggle.classList.toggle("border-emerald-200", isLoopingThisEntry);
+    loopToggle.classList.toggle("bg-emerald-50/40", isLoopingThisEntry);
+    loopToggle.classList.toggle("text-slate-700", isLoopingThisEntry);
     loopToggle.innerHTML = `
-      <span class="inline-flex h-4 w-7 items-center rounded-full ${isLoopingThisEntry ? "bg-emerald-400" : "bg-slate-300"}">
-        <span class="block h-4 w-4 rounded-full bg-white shadow transition-transform" style="transform: translateX(${isLoopingThisEntry ? "12px" : "0px"});"></span>
+      <span class="inline-flex h-4 w-8 items-center rounded-full ${isLoopingThisEntry ? "bg-emerald-400" : "bg-slate-200"}">
+        <span class="block h-4 w-4 rounded-full bg-white shadow transition-transform" style="transform: translateX(${isLoopingThisEntry ? "16px" : "0px"});"></span>
       </span>
       <span>Loop in background</span>
     `;

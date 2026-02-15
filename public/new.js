@@ -1328,8 +1328,7 @@ async function handleHistoryAction(entry, intent) {
   const isLoopingThisEntry =
     scannerState.historyLoopEntryId &&
     scannerState.historyLoopEntryId === entry.id &&
-    scannerState.historyLoopAudio &&
-    !scannerState.historyLoopAudio.paused;
+    scannerState.historyLoopAudio;
   const isPlayingThisEntry =
     scannerState.historyPlayEntryId &&
     scannerState.historyPlayEntryId === entry.id &&
