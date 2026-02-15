@@ -1,4 +1,5 @@
 export const MAX_HISTORY_ITEMS = 12;
+const VISIBLE_HISTORY_ITEMS = 3;
 
 export function getEncodeHistoryKey(scannerState) {
   if (!scannerState.user || !scannerState.user.email) return null;
@@ -103,9 +104,15 @@ export function renderEncodeHistory({
   const items = scannerState.encodeHistory;
   dom.historyList.innerHTML = "";
 
+  const hasHiddenItems = items.length > VISIBLE_HISTORY_ITEMS;
+  const visibleItems = scannerState.showAllHistory ? items : items.slice(0, VISIBLE_HISTORY_ITEMS);
+
   if (!items.length) {
     dom.historyEmpty.classList.remove("hidden");
     dom.historyCount.textContent = "0 items";
+    if (dom.historyShowMore) {
+      dom.historyShowMore.classList.add("hidden");
+    }
     return;
   }
 
@@ -113,26 +120,48 @@ export function renderEncodeHistory({
   dom.historyEmpty.classList.add("hidden");
   dom.historyCount.textContent = `${items.length} item${items.length === 1 ? "" : "s"} • ${totalScans} scan${totalScans === 1 ? "" : "s"}`;
 
-  const createIconButton = (label, svgMarkup, handler) => {
+  if (dom.historyShowMore) {
+    if (hasHiddenItems) {
+      dom.historyShowMore.classList.remove("hidden");
+      dom.historyShowMore.textContent = scannerState.showAllHistory ? "Show less" : "Show more";
+      dom.historyShowMore.onclick = () => {
+        scannerState.showAllHistory = !scannerState.showAllHistory;
+        renderEncodeHistory({ scannerState, dom, onHistoryAction, showToast, normalizeUrl });
+      };
+    } else {
+      dom.historyShowMore.classList.add("hidden");
+      dom.historyShowMore.onclick = null;
+    }
+  }
+
+  const createIconButton = (label, svgMarkup, handler, className = "") => {
     const button = document.createElement("button");
     button.type = "button";
     button.className =
-      "history-icon-button inline-flex flex-1 items-center justify-center rounded-2xl border border-slate-100 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-200 hover:text-slate-900";
+      `history-icon-button inline-flex flex-1 items-center justify-center rounded-2xl border border-slate-100 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-200 hover:text-slate-900 ${className}`.trim();
     button.innerHTML = `${svgMarkup}<span class="sr-only">${label}</span>`;
     button.addEventListener("click", handler);
     return button;
   };
 
-  items.forEach((entry) => {
+  visibleItems.forEach((entry) => {
     const isLoopingThisEntry =
       scannerState.historyLoopEntryId &&
       scannerState.historyLoopEntryId === entry.id &&
       scannerState.historyLoopAudio &&
       !scannerState.historyLoopAudio.paused;
+    const isCurrentEntry = scannerState.currentHistoryEntryId && scannerState.currentHistoryEntryId === entry.id;
 
     const li = document.createElement("li");
     li.className =
-      "w-full overflow-hidden rounded-3xl border border-slate-100 bg-white/95 p-5 shadow-[0_15px_50px_-30px_rgba(15,23,42,0.35)]";
+      "w-full overflow-hidden rounded-3xl border border-slate-100 bg-white/95 p-5 shadow-[0_15px_50px_-30px_rgba(15,23,42,0.35)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_60px_-30px_rgba(15,23,42,0.45)]";
+    if (isCurrentEntry) {
+      li.classList.add("border-[#cfc7ff]", "bg-[#fafbff]");
+    }
+    li.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.closest("button")) return;
+      void onHistoryAction(entry, "select");
+    });
 
     const header = document.createElement("div");
     header.className = "flex min-w-0 items-start gap-3";
@@ -141,11 +170,13 @@ export function renderEncodeHistory({
     const displayText = entry.url || entry.text || "Untitled link";
     titleWrap.innerHTML = `<p class="break-all text-base font-semibold text-slate-900">${displayText}</p><p class="text-xs text-slate-400">${formatRelativeTime(entry.timestamp)}</p>`;
     header.appendChild(titleWrap);
-    const modeBadge = document.createElement("span");
-    modeBadge.className =
-      "ml-auto shrink-0 rounded-full bg-[#f4f5ff] px-3 py-1 text-xs font-semibold text-slate-500";
-    modeBadge.textContent = "Ultrasound";
-    header.appendChild(modeBadge);
+    if (isCurrentEntry) {
+      const currentBadge = document.createElement("span");
+      currentBadge.className =
+        "ml-auto shrink-0 rounded-full bg-[#eef2ff] px-3 py-1 text-xs font-semibold text-slate-600";
+      currentBadge.textContent = "Current";
+      header.appendChild(currentBadge);
+    }
     li.appendChild(header);
 
     const stats = document.createElement("div");
@@ -168,10 +199,10 @@ export function renderEncodeHistory({
     );
     controls.appendChild(
       createIconButton(
-        "Loop playback",
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 12a8 8 0 0113.856-4.856M20 12a8 8 0 01-13.856 4.856M12 6v6l3 3"/></svg>',
+        "Open link",
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h4m0 0v4m0-4l-7 7M7 11v6h6"/></svg>',
         () => {
-          void onHistoryAction(entry, "loop");
+          void onHistoryAction(entry, "open");
         },
       ),
     );
@@ -188,17 +219,6 @@ export function renderEncodeHistory({
 
     const secondaryControls = document.createElement("div");
     secondaryControls.className = "mt-4 grid gap-2 text-xs text-slate-500 sm:grid-cols-2";
-    const openBtn = document.createElement("button");
-    openBtn.type = "button";
-    openBtn.className =
-      "flex-1 rounded-2xl border border-slate-100 bg-white px-4 py-2 text-left font-semibold text-slate-600";
-    openBtn.textContent = "Open link";
-    openBtn.addEventListener("click", () => {
-      const normalized = entry.url ? normalizeUrl(entry.url) : null;
-      if (normalized) {
-        window.open(normalized, "_blank", "noopener");
-      }
-    });
     const copyBtn = document.createElement("button");
     copyBtn.type = "button";
     copyBtn.className =
@@ -213,8 +233,17 @@ export function renderEncodeHistory({
         showToast("Copy failed. Try again.");
       }
     });
-    secondaryControls.appendChild(openBtn);
     secondaryControls.appendChild(copyBtn);
+    secondaryControls.appendChild(
+      createIconButton(
+        "Delete sound",
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 7h10m-9 0l1 12h6l1-12M10 7V5h4v2"/></svg>',
+        () => {
+          void onHistoryAction(entry, "delete");
+        },
+        "text-rose-500 hover:text-rose-600",
+      ),
+    );
     li.appendChild(secondaryControls);
 
     const loopToggle = document.createElement("button");

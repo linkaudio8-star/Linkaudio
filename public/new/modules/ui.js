@@ -43,9 +43,11 @@ export const selectors = {
   generateButton: "#new-generate-sound",
   playButton: "#new-play-sound",
   openLinkButtonGenerated: "#new-open-link",
+  deleteButtonGenerated: "#new-delete-sound",
   playLoopButton: "#new-loop-sound",
   downloadButton: "#new-download-sound",
   previewAudio: "#new-preview-audio",
+  currentBadge: "#new-current-badge",
   encodeVolume: "#encode-volume-slider",
   encodeVolumeValue: "#encode-volume-value",
   upgradeButtons: "[data-upgrade-plan]",
@@ -56,6 +58,7 @@ export const selectors = {
   historyList: "#encode-history-list",
   historyEmpty: "#encode-history-empty",
   historyCount: "#encode-history-count",
+  historyShowMore: "#encode-history-show-more",
   heroLogin: "#hero-login",
   dashboardScanButton: "#dashboard-scan-button",
   lastDecodeCard: "#last-decode-card",
@@ -117,6 +120,7 @@ export function cacheDom(dom) {
   dom.generateButton = document.querySelector(selectors.generateButton);
   dom.playButton = document.querySelector(selectors.playButton);
   dom.openLinkButtonGenerated = document.querySelector(selectors.openLinkButtonGenerated);
+  dom.deleteButtonGenerated = document.querySelector(selectors.deleteButtonGenerated);
   dom.playLoopButton = document.querySelector(selectors.playLoopButton);
   dom.playLoopLabel = dom.playLoopButton
     ? dom.playLoopButton.querySelector("[data-loop-label]")
@@ -129,6 +133,7 @@ export function cacheDom(dom) {
     : null;
   dom.downloadButton = document.querySelector(selectors.downloadButton);
   dom.previewAudio = document.querySelector(selectors.previewAudio);
+  dom.currentBadge = document.querySelector(selectors.currentBadge);
   dom.encodeVolume = document.querySelector(selectors.encodeVolume);
   dom.encodeVolumeValue = document.querySelector(selectors.encodeVolumeValue);
   dom.upgradeButtons = Array.from(document.querySelectorAll(selectors.upgradeButtons || []));
@@ -139,6 +144,7 @@ export function cacheDom(dom) {
   dom.historyList = document.querySelector(selectors.historyList);
   dom.historyEmpty = document.querySelector(selectors.historyEmpty);
   dom.historyCount = document.querySelector(selectors.historyCount);
+  dom.historyShowMore = document.querySelector(selectors.historyShowMore);
   dom.heroLogin = document.querySelector(selectors.heroLogin);
   dom.dashboardScanButton = document.querySelector(selectors.dashboardScanButton);
   dom.lastDecodeCard = document.querySelector(selectors.lastDecodeCard);

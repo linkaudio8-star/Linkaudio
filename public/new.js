@@ -67,6 +67,8 @@ const scannerState = {
   historyLoopAudio: null,
   historyLoopObjectUrl: null,
   historyLoopEntryId: null,
+  currentHistoryEntryId: null,
+  showAllHistory: false,
   encodeHistory: [],
   billing: {
     plan: "free",
@@ -195,6 +197,11 @@ function renderEncodeHistory() {
     showToast,
     normalizeUrl,
   });
+}
+
+function updateCurrentBadgeVisibility() {
+  if (!dom.currentBadge) return;
+  dom.currentBadge.classList.toggle("hidden", !scannerState.currentHistoryEntryId);
 }
 
 
@@ -460,6 +467,7 @@ function applyUserState() {
     if (dom.encodeInput) {
       dom.encodeInput.value = loadEncodeDraft();
     }
+    scannerState.showAllHistory = false;
     loadEncodeHistory();
     renderEncodeHistory();
     updateDashboardStats();
@@ -470,12 +478,16 @@ function applyUserState() {
       dom.encodeInput.value = "";
     }
     scannerState.encodeHistory = [];
+    scannerState.currentHistoryEntryId = null;
+    updateCurrentBadgeVisibility();
     if (dom.historyList) dom.historyList.innerHTML = "";
     if (dom.historyEmpty) dom.historyEmpty.classList.remove("hidden");
     if (dom.historyCount) dom.historyCount.textContent = "0 items";
+    if (dom.historyShowMore) dom.historyShowMore.classList.add("hidden");
     updateDashboardStats();
     updateLastResultDisplays("None");
   }
+  updateCurrentBadgeVisibility();
 }
 
 function openLoginOverlay({ mode } = {}) {
@@ -801,6 +813,16 @@ function loadLastGeneratedSound() {
   }
 }
 
+function clearLastGeneratedSound() {
+  const key = getLastEncodeStorageKey();
+  if (!key) return;
+  try {
+    localStorage.removeItem(key);
+  } catch (err) {
+    console.warn("Failed to clear last generated sound", err);
+  }
+}
+
 function saveEncodeDraft(text) {
   const key = getEncodeDraftStorageKey();
   if (!key) return;
@@ -918,6 +940,7 @@ function renderEncodedAudio({ sourceText, skipHistory = false, resetPlayback = f
   if (dom.playLoopButton) dom.playLoopButton.disabled = false;
   if (dom.downloadButton) dom.downloadButton.disabled = false;
   if (dom.openLinkButtonGenerated) dom.openLinkButtonGenerated.disabled = !scannerState.encodedTargetUrl;
+  if (dom.deleteButtonGenerated) dom.deleteButtonGenerated.disabled = false;
 
   if (!skipHistory && sourceText) {
     addEncodeHistoryEntry(sourceText);
@@ -944,6 +967,33 @@ function applyEncodedAudio(int16Samples, { sourceText, skipHistory = false } = {
   renderEncodedAudio({ sourceText, skipHistory, resetPlayback: true });
 }
 
+function loadHistoryEntryIntoCurrent(entry, { showFeedback = false } = {}) {
+  if (!entry) return false;
+  const payload = entry.text || entry.url;
+  if (!payload || !scannerState.ggwave || scannerState.ggwaveInstance === null) {
+    return false;
+  }
+  try {
+    const int16Samples = encodeTextToInt16Samples(payload);
+    scannerState.currentHistoryEntryId = entry.id;
+    applyEncodedAudio(int16Samples, { sourceText: payload, skipHistory: true });
+    if (dom.encodeInput) {
+      dom.encodeInput.value = payload;
+    }
+    saveEncodeDraft(payload);
+    saveLastGeneratedSound(payload);
+    updateCurrentBadgeVisibility();
+    renderEncodeHistory();
+    if (showFeedback) {
+      showToast("Loaded selected sound.");
+    }
+    return true;
+  } catch (err) {
+    console.warn("Failed to load history item into current controls", err);
+    return false;
+  }
+}
+
 function encodeTextToInt16Samples(text) {
   const protocolId =
     getProtocolIdForCurrentMode() || scannerState.ggwave.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST;
@@ -965,7 +1015,10 @@ function restoreLastGeneratedSound() {
   }
   try {
     const int16Samples = encodeTextToInt16Samples(lastSource);
+    scannerState.currentHistoryEntryId = null;
     applyEncodedAudio(int16Samples, { sourceText: lastSource, skipHistory: true });
+    updateCurrentBadgeVisibility();
+    renderEncodeHistory();
   } catch (err) {
     console.warn("Failed to restore last generated sound", err);
   }
@@ -1054,6 +1107,7 @@ function resetEncodeUI() {
   scannerState.encodedWaveform = null;
   scannerState.encodedBaseSamples = null;
   scannerState.encodedTargetUrl = null;
+  scannerState.currentHistoryEntryId = null;
   if (dom.playButton) {
     dom.playButton.disabled = true;
   }
@@ -1067,6 +1121,9 @@ function resetEncodeUI() {
   if (dom.openLinkButtonGenerated) {
     dom.openLinkButtonGenerated.disabled = true;
   }
+  if (dom.deleteButtonGenerated) {
+    dom.deleteButtonGenerated.disabled = true;
+  }
   if (dom.previewAudio) {
     if (dom.previewAudio.src) {
       URL.revokeObjectURL(dom.previewAudio.src);
@@ -1074,7 +1131,50 @@ function resetEncodeUI() {
     dom.previewAudio.src = "";
     dom.previewAudio.classList.add("hidden");
   }
+  updateCurrentBadgeVisibility();
   updateLoopButtonState();
+}
+
+function deleteHistoryEntryById(entryId) {
+  if (!entryId) return;
+  const removedEntry = scannerState.encodeHistory.find((item) => item.id === entryId) || null;
+  const beforeLength = scannerState.encodeHistory.length;
+  scannerState.encodeHistory = scannerState.encodeHistory.filter((item) => item.id !== entryId);
+  if (scannerState.encodeHistory.length === beforeLength) return;
+  if (scannerState.currentHistoryEntryId === entryId) {
+    resetEncodeUI();
+  }
+  renderEncodeHistory();
+  saveEncodeHistory();
+  const lastGenerated = loadLastGeneratedSound();
+  const removedText = (removedEntry?.text || removedEntry?.url || "").trim();
+  if (lastGenerated && removedText && lastGenerated === removedText) {
+    clearLastGeneratedSound();
+  }
+  updateDashboardStats();
+  const last = scannerState.encodeHistory[0];
+  updateLastResultDisplays(last ? last.text : "None");
+}
+
+function deleteCurrentSound() {
+  const confirmDelete = window.confirm("Delete this sound?");
+  if (!confirmDelete) return;
+  const currentId = scannerState.currentHistoryEntryId;
+  if (currentId) {
+    deleteHistoryEntryById(currentId);
+    showToast("Sound deleted.");
+    return;
+  }
+  const draft = (dom.encodeInput?.value || "").trim();
+  if (draft) {
+    saveEncodeDraft("");
+    if (dom.encodeInput) {
+      dom.encodeInput.value = "";
+    }
+  }
+  clearLastGeneratedSound();
+  resetEncodeUI();
+  showToast("Sound deleted.");
 }
 
 function addEncodeHistoryEntry(text) {
@@ -1130,9 +1230,12 @@ async function handleGenerateSound() {
 
   try {
     const int16Samples = encodeTextToInt16Samples(text);
+    scannerState.currentHistoryEntryId = null;
     applyEncodedAudio(int16Samples, { sourceText: text });
     saveEncodeDraft(text);
     saveLastGeneratedSound(text);
+    updateCurrentBadgeVisibility();
+    renderEncodeHistory();
     showToast("Sound link ready — press play to preview.");
   } catch (err) {
     console.error("Failed to generate sound", err);
@@ -1151,6 +1254,15 @@ async function handleHistoryAction(entry, intent) {
   const payload = entry.text || entry.url;
   if (!payload) {
     showToast("This entry has no text to replay.");
+    return;
+  }
+
+  if (intent === "delete") {
+    const confirmDelete = window.confirm("Delete this sound?");
+    if (!confirmDelete) return;
+    stopHistoryLoopPlayback({ rerender: false });
+    deleteHistoryEntryById(entry.id);
+    showToast("Sound deleted.");
     return;
   }
 
@@ -1188,11 +1300,26 @@ async function handleHistoryAction(entry, intent) {
     return;
   }
 
+  loadHistoryEntryIntoCurrent(entry, { showFeedback: intent === "select" });
+  if (intent === "select") {
+    return;
+  }
+
   let protocolId =
     getProtocolIdForMode(entry.mode) || getProtocolIdForCurrentMode() || scannerState.ggwave.ProtocolId?.GGWAVE_PROTOCOL_AUDIBLE_FAST;
 
   if (!protocolId) {
     showToast("Unable to determine playback mode.");
+    return;
+  }
+
+  if (intent === "open") {
+    const normalized = normalizeUrl(entry.url || payload);
+    if (!normalized) {
+      showToast("No valid URL to open.");
+      return;
+    }
+    window.open(normalized, "_blank", "noopener");
     return;
   }
 
@@ -1302,6 +1429,10 @@ function handleOpenGeneratedLink() {
     dom.openLinkButtonGenerated.disabled = false;
   }
   window.open(target, "_blank", "noopener");
+}
+
+function handleDeleteGeneratedSound() {
+  deleteCurrentSound();
 }
 
 
@@ -1906,6 +2037,9 @@ function wireEvents() {
   });
   dom.openLinkButtonGenerated?.addEventListener("click", () => {
     handleOpenGeneratedLink();
+  });
+  dom.deleteButtonGenerated?.addEventListener("click", () => {
+    handleDeleteGeneratedSound();
   });
 
   window.addEventListener("beforeunload", () => {
