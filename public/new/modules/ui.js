@@ -42,6 +42,7 @@ export const selectors = {
   encodeInput: "#new-encode-input",
   generateButton: "#new-generate-sound",
   playButton: "#new-play-sound",
+  openLinkButtonGenerated: "#new-open-link",
   playLoopButton: "#new-loop-sound",
   downloadButton: "#new-download-sound",
   previewAudio: "#new-preview-audio",
@@ -115,6 +116,7 @@ export function cacheDom(dom) {
   dom.encodeInput = document.querySelector(selectors.encodeInput);
   dom.generateButton = document.querySelector(selectors.generateButton);
   dom.playButton = document.querySelector(selectors.playButton);
+  dom.openLinkButtonGenerated = document.querySelector(selectors.openLinkButtonGenerated);
   dom.playLoopButton = document.querySelector(selectors.playLoopButton);
   dom.playLoopLabel = dom.playLoopButton
     ? dom.playLoopButton.querySelector("[data-loop-label]")

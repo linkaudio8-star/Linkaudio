@@ -61,6 +61,7 @@ const scannerState = {
   encodedWaveform: null,
   encodedSamples: null,
   encodedBaseSamples: null,
+  encodedTargetUrl: null,
   encodeGain: 1,
   loopingPlayback: false,
   historyLoopAudio: null,
@@ -671,6 +672,19 @@ function normalizeUrl(rawUrl) {
   return `https://${trimmed}`;
 }
 
+function resolveGeneratedTargetUrl(sourceText) {
+  const raw = String(sourceText || "").trim();
+  if (!raw) return null;
+  const detected = detectFirstUrl(raw);
+  if (detected) {
+    return normalizeUrl(detected);
+  }
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(raw)) {
+    return normalizeUrl(raw);
+  }
+  return null;
+}
+
 function getProtocolIdForMode(mode) {
   if (!scannerState.ggwave || !scannerState.ggwave.ProtocolId) return null;
   const { ProtocolId } = scannerState.ggwave;
@@ -799,6 +813,9 @@ function renderEncodedAudio({ sourceText, skipHistory = false, resetPlayback = f
   scannerState.encodedSamples = scaledSamples;
   scannerState.encodedWaveform = new Int8Array(scaledSamples.buffer.slice(0));
   scannerState.encodedBlob = createWavBlob(scaledSamples, scannerState.sampleRate);
+  if (sourceText !== undefined) {
+    scannerState.encodedTargetUrl = resolveGeneratedTargetUrl(sourceText);
+  }
 
   if (dom.previewAudio) {
     if (previousBlobUrl) {
@@ -823,6 +840,7 @@ function renderEncodedAudio({ sourceText, skipHistory = false, resetPlayback = f
   if (dom.playButton) dom.playButton.disabled = false;
   if (dom.playLoopButton) dom.playLoopButton.disabled = false;
   if (dom.downloadButton) dom.downloadButton.disabled = false;
+  if (dom.openLinkButtonGenerated) dom.openLinkButtonGenerated.disabled = !scannerState.encodedTargetUrl;
 
   if (!skipHistory && sourceText) {
     addEncodeHistoryEntry(sourceText);
@@ -931,6 +949,7 @@ function resetEncodeUI() {
   scannerState.encodedSamples = null;
   scannerState.encodedWaveform = null;
   scannerState.encodedBaseSamples = null;
+  scannerState.encodedTargetUrl = null;
   if (dom.playButton) {
     dom.playButton.disabled = true;
   }
@@ -940,6 +959,9 @@ function resetEncodeUI() {
   }
   if (dom.downloadButton) {
     dom.downloadButton.disabled = true;
+  }
+  if (dom.openLinkButtonGenerated) {
+    dom.openLinkButtonGenerated.disabled = true;
   }
   if (dom.previewAudio) {
     if (dom.previewAudio.src) {
@@ -1171,6 +1193,14 @@ function handleDownloadSound() {
   link.click();
   document.body.removeChild(link);
   window.setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+}
+
+function handleOpenGeneratedLink() {
+  if (!scannerState.encodedTargetUrl) {
+    showToast("Generate a sound link from a URL first.");
+    return;
+  }
+  window.open(scannerState.encodedTargetUrl, "_blank", "noopener");
 }
 
 
@@ -1767,6 +1797,9 @@ function wireEvents() {
 
   dom.downloadButton?.addEventListener("click", () => {
     handleDownloadSound();
+  });
+  dom.openLinkButtonGenerated?.addEventListener("click", () => {
+    handleOpenGeneratedLink();
   });
 
   window.addEventListener("beforeunload", () => {
