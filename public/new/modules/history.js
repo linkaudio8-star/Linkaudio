@@ -162,19 +162,9 @@ export function renderEncodeHistory({
       if (event.target instanceof Element && event.target.closest("button")) return;
       void onHistoryAction(entry, "select");
     });
-    li.appendChild(
-      createIconButton(
-        "Delete sound",
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m-9 0l1 13h8l1-13M10 11v5m4-5v5"/></svg>',
-        () => {
-          void onHistoryAction(entry, "delete");
-        },
-        "absolute right-2 top-2 h-9 w-9 flex-none rounded-lg border-slate-200 bg-white px-0 py-0 text-slate-400 hover:border-rose-200 hover:text-rose-500",
-      ),
-    );
 
     const header = document.createElement("div");
-    header.className = "flex min-w-0 items-start gap-3 pr-14";
+    header.className = "flex min-w-0 items-start gap-3";
     const titleWrap = document.createElement("div");
     titleWrap.className = "min-w-0 flex-1";
     const displayText = entry.url || entry.text || "Untitled link";
@@ -231,11 +221,11 @@ export function renderEncodeHistory({
     li.appendChild(controls);
 
     const secondaryControls = document.createElement("div");
-    secondaryControls.className = "mt-4 grid gap-2 text-xs text-slate-500 sm:grid-cols-2";
+    secondaryControls.className = "mt-4 flex items-center justify-between gap-2 text-xs text-slate-500";
     const copyBtn = document.createElement("button");
     copyBtn.type = "button";
     copyBtn.className =
-      "flex-1 rounded-2xl border border-slate-100 bg-white px-4 py-2 text-left font-semibold text-slate-600";
+      "rounded-2xl border border-slate-100 bg-white px-4 py-2 text-left font-semibold text-slate-600";
     copyBtn.textContent = "Copy text";
     copyBtn.addEventListener("click", async () => {
       try {
@@ -247,6 +237,16 @@ export function renderEncodeHistory({
       }
     });
     secondaryControls.appendChild(copyBtn);
+    secondaryControls.appendChild(
+      createIconButton(
+        "Delete sound",
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m-9 0l1 13h8l1-13M10 11v5m4-5v5"/></svg>',
+        () => {
+          void onHistoryAction(entry, "delete");
+        },
+        "h-9 w-9 flex-none rounded-lg border-slate-200 px-0 py-0 text-slate-400 hover:border-rose-200 hover:text-rose-500",
+      ),
+    );
     li.appendChild(secondaryControls);
 
     const loopToggle = document.createElement("button");
