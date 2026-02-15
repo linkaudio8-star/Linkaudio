@@ -145,6 +145,12 @@ export function renderEncodeHistory({
   };
 
   visibleItems.forEach((entry) => {
+    const isPlayingThisEntry =
+      scannerState.historyPlayEntryId &&
+      scannerState.historyPlayEntryId === entry.id &&
+      scannerState.historyPlayAudio &&
+      !scannerState.historyPlayAudio.paused &&
+      !scannerState.historyPlayAudio.ended;
     const isLoopingThisEntry =
       scannerState.historyLoopEntryId &&
       scannerState.historyLoopEntryId === entry.id &&
@@ -193,8 +199,10 @@ export function renderEncodeHistory({
     controls.className = "mt-4 grid grid-cols-3 gap-2";
     controls.appendChild(
       createIconButton(
-        "Play link",
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>',
+        isPlayingThisEntry ? "Stop playback" : "Play link",
+        isPlayingThisEntry
+          ? '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M7 6h4v12H7zm6 0h4v12h-4z"/></svg>'
+          : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>',
         () => {
           void onHistoryAction(entry, "play");
         },
@@ -254,6 +262,9 @@ export function renderEncodeHistory({
     loopToggle.setAttribute("aria-pressed", isLoopingThisEntry ? "true" : "false");
     loopToggle.className =
       "mt-4 inline-flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-[#f8f9ff] px-4 py-2 text-left text-xs font-semibold text-slate-600";
+    if (isLoopingThisEntry) {
+      loopToggle.classList.add("border-emerald-200", "bg-emerald-50/40", "text-slate-700");
+    }
     loopToggle.innerHTML = `
       <span class="inline-flex h-4 w-7 items-center rounded-full ${isLoopingThisEntry ? "bg-emerald-400" : "bg-slate-300"}">
         <span class="block h-4 w-4 rounded-full bg-white shadow transition-transform" style="transform: translateX(${isLoopingThisEntry ? "12px" : "0px"});"></span>

@@ -67,6 +67,9 @@ const scannerState = {
   historyLoopAudio: null,
   historyLoopObjectUrl: null,
   historyLoopEntryId: null,
+  historyPlayAudio: null,
+  historyPlayObjectUrl: null,
+  historyPlayEntryId: null,
   currentHistoryEntryId: null,
   showAllHistory: false,
   encodeHistory: [],
@@ -1049,6 +1052,14 @@ function updateLoopButtonState() {
   }
 }
 
+function updatePlayButtonState() {
+  if (!dom.playButton) return;
+  const isPlaying = !!(dom.previewAudio && !dom.previewAudio.paused && !dom.previewAudio.ended);
+  dom.playButton.setAttribute("aria-pressed", isPlaying ? "true" : "false");
+  dom.playButton.classList.toggle("bg-[#eef2ff]", isPlaying);
+  dom.playButton.classList.toggle("text-[#5b4ff5]", isPlaying);
+}
+
 function stopLoopPlayback({ updateButton = true } = {}) {
   if (dom.previewAudio) {
     dom.previewAudio.pause();
@@ -1059,10 +1070,28 @@ function stopLoopPlayback({ updateButton = true } = {}) {
   if (updateButton) {
     updateLoopButtonState();
   }
+  updatePlayButtonState();
 }
 
 function stopHistoryLoopPlayback({ rerender = true } = {}) {
   stopHistoryLoopPlaybackFromAudio(scannerState, rerender, renderEncodeHistory);
+}
+
+function stopHistoryPlayPlayback({ rerender = true } = {}) {
+  if (scannerState.historyPlayAudio) {
+    scannerState.historyPlayAudio.pause();
+    scannerState.historyPlayAudio.currentTime = 0;
+    scannerState.historyPlayAudio.src = "";
+    scannerState.historyPlayAudio = null;
+  }
+  if (scannerState.historyPlayObjectUrl) {
+    URL.revokeObjectURL(scannerState.historyPlayObjectUrl);
+    scannerState.historyPlayObjectUrl = null;
+  }
+  scannerState.historyPlayEntryId = null;
+  if (rerender) {
+    renderEncodeHistory();
+  }
 }
 
 function encodePayloadToWavBlob(payload, protocolId) {
@@ -1142,10 +1171,17 @@ function resetEncodeUI() {
   updateCurrentBadgeVisibility();
   updateOpenLinkButtonState();
   updateLoopButtonState();
+  updatePlayButtonState();
 }
 
 function deleteHistoryEntryById(entryId) {
   if (!entryId) return;
+  if (scannerState.historyPlayEntryId === entryId) {
+    stopHistoryPlayPlayback({ rerender: false });
+  }
+  if (scannerState.historyLoopEntryId === entryId) {
+    stopHistoryLoopPlayback({ rerender: false });
+  }
   const removedEntry = scannerState.encodeHistory.find((item) => item.id === entryId) || null;
   const beforeLength = scannerState.encodeHistory.length;
   scannerState.encodeHistory = scannerState.encodeHistory.filter((item) => item.id !== entryId);
@@ -1280,9 +1316,20 @@ async function handleHistoryAction(entry, intent) {
     scannerState.historyLoopEntryId === entry.id &&
     scannerState.historyLoopAudio &&
     !scannerState.historyLoopAudio.paused;
+  const isPlayingThisEntry =
+    scannerState.historyPlayEntryId &&
+    scannerState.historyPlayEntryId === entry.id &&
+    scannerState.historyPlayAudio &&
+    !scannerState.historyPlayAudio.paused &&
+    !scannerState.historyPlayAudio.ended;
   if (intent === "loop" && isLoopingThisEntry) {
     stopHistoryLoopPlayback();
     showToast("Looping stopped.");
+    return;
+  }
+  if (intent === "play" && isPlayingThisEntry) {
+    stopHistoryPlayPlayback();
+    showToast("Playback stopped.");
     return;
   }
 
@@ -1335,13 +1382,25 @@ async function handleHistoryAction(entry, intent) {
 
   const objectUrl = URL.createObjectURL(historyBlob);
   if (intent === "play") {
+    stopHistoryLoopPlayback({ rerender: false });
+    stopHistoryPlayPlayback({ rerender: false });
     const audio = new Audio(objectUrl);
     audio.loop = false;
     const cleanup = () => {
-      URL.revokeObjectURL(objectUrl);
+      if (scannerState.historyPlayObjectUrl) {
+        URL.revokeObjectURL(scannerState.historyPlayObjectUrl);
+      }
+      scannerState.historyPlayObjectUrl = null;
+      scannerState.historyPlayAudio = null;
+      scannerState.historyPlayEntryId = null;
       audio.onended = null;
       audio.onerror = null;
+      renderEncodeHistory();
     };
+    scannerState.historyPlayAudio = audio;
+    scannerState.historyPlayObjectUrl = objectUrl;
+    scannerState.historyPlayEntryId = entry.id;
+    renderEncodeHistory();
     audio.onended = cleanup;
     audio.onerror = cleanup;
     audio.play().catch((err) => {
@@ -1351,6 +1410,7 @@ async function handleHistoryAction(entry, intent) {
     });
     return;
   } else if (intent === "loop") {
+    stopHistoryPlayPlayback({ rerender: false });
     stopHistoryLoopPlayback({ rerender: false });
     const loopAudio = new Audio(objectUrl);
     loopAudio.loop = true;
@@ -1387,6 +1447,11 @@ function playEncodedAudio() {
     showToast("Generate a sound link first.");
     return;
   }
+  if (!dom.previewAudio.paused && !dom.previewAudio.ended) {
+    dom.previewAudio.pause();
+    updatePlayButtonState();
+    return;
+  }
   stopLoopPlayback({ updateButton: false });
   if (dom.previewAudio.src) {
     dom.previewAudio.currentTime = 0;
@@ -1400,8 +1465,12 @@ function playEncodedAudio() {
     .catch((err) => {
       console.warn("Unable to autoplay audio preview", err);
       showToast("Press play on the audio player to listen.");
+    })
+    .finally(() => {
+      updatePlayButtonState();
     });
   updateLoopButtonState();
+  updatePlayButtonState();
 }
 
 function handleDownloadSound() {
@@ -1967,6 +2036,7 @@ function wireEvents() {
 
   dom.headerLogout?.addEventListener("click", async () => {
     await performLogout();
+    stopHistoryPlayPlayback({ rerender: false });
     stopHistoryLoopPlayback({ rerender: false });
     scannerState.user = null;
     resetBillingState();
@@ -2019,6 +2089,9 @@ function wireEvents() {
   dom.playButton?.addEventListener("click", () => {
     playEncodedAudio();
   });
+  dom.previewAudio?.addEventListener("play", updatePlayButtonState);
+  dom.previewAudio?.addEventListener("pause", updatePlayButtonState);
+  dom.previewAudio?.addEventListener("ended", updatePlayButtonState);
 
   dom.playLoopButton?.addEventListener("click", () => {
     toggleLoopPlayback();
@@ -2045,6 +2118,7 @@ function wireEvents() {
   });
 
   window.addEventListener("beforeunload", () => {
+    stopHistoryPlayPlayback({ rerender: false });
     stopHistoryLoopPlayback({ rerender: false });
     resetCountdown();
     cleanupRecordingNodes();
