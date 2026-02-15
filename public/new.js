@@ -1134,9 +1134,6 @@ async function handleGenerateSound() {
     saveEncodeDraft(text);
     saveLastGeneratedSound(text);
     showToast("Sound link ready — press play to preview.");
-    if (dom.encodeInput) {
-      dom.encodeInput.value = "";
-    }
   } catch (err) {
     console.error("Failed to generate sound", err);
     showToast("Something went wrong while generating the sound.");
@@ -1294,11 +1291,17 @@ function handleDownloadSound() {
 }
 
 function handleOpenGeneratedLink() {
-  if (!scannerState.encodedTargetUrl) {
+  const fallbackFromInput = resolveGeneratedTargetUrl(dom.encodeInput?.value || "");
+  const target = scannerState.encodedTargetUrl || fallbackFromInput;
+  if (!target) {
     showToast("Generate a sound link from a URL first.");
     return;
   }
-  window.open(scannerState.encodedTargetUrl, "_blank", "noopener");
+  scannerState.encodedTargetUrl = target;
+  if (dom.openLinkButtonGenerated) {
+    dom.openLinkButtonGenerated.disabled = false;
+  }
+  window.open(target, "_blank", "noopener");
 }
 
 
