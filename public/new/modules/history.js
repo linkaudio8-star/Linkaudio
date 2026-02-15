@@ -169,12 +169,12 @@ export function renderEncodeHistory({
         () => {
           void onHistoryAction(entry, "delete");
         },
-        "absolute right-4 top-4 h-9 w-9 flex-none rounded-lg border-slate-200 bg-white px-0 py-0 text-slate-400 hover:border-rose-200 hover:text-rose-500",
+        "absolute right-2 top-2 h-9 w-9 flex-none rounded-lg border-slate-200 bg-white px-0 py-0 text-slate-400 hover:border-rose-200 hover:text-rose-500",
       ),
     );
 
     const header = document.createElement("div");
-    header.className = "flex min-w-0 items-start gap-3 pr-12";
+    header.className = "flex min-w-0 items-start gap-3 pr-14";
     const titleWrap = document.createElement("div");
     titleWrap.className = "min-w-0 flex-1";
     const displayText = entry.url || entry.text || "Untitled link";
