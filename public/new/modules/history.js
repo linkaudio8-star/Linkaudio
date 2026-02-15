@@ -237,7 +237,7 @@ export function renderEncodeHistory({
     secondaryControls.appendChild(
       createIconButton(
         "Delete sound",
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3h6m-7 4h8m-7 0v11a2 2 0 002 2h2a2 2 0 002-2V7M10 11v6m4-6v6"/></svg>',
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m-9 0l1 13h8l1-13M10 11v5m4-5v5"/></svg>',
         () => {
           void onHistoryAction(entry, "delete");
         },
