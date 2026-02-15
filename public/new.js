@@ -1286,14 +1286,6 @@ async function handleHistoryAction(entry, intent) {
     return;
   }
 
-  try {
-    await ensureAudioContext();
-  } catch (err) {
-    console.error("Audio context unavailable for history playback", err);
-    showToast("Unable to prepare audio. Check browser permissions.");
-    return;
-  }
-
   if (scannerState.ggwaveReady) {
     try {
       await scannerState.ggwaveReady;
