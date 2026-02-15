@@ -23,7 +23,9 @@ const scannerState = {
   encodedBaseSamples: null,
   encodeGain: 1,
   loopingPlayback: false,
-  loopingHistoryEntryId: null,
+  historyLoopAudio: null,
+  historyLoopObjectUrl: null,
+  historyLoopEntryId: null,
   encodeHistory: [],
   billing: {
     plan: "free",
@@ -573,9 +575,10 @@ function renderEncodeHistory() {
 
   items.forEach((entry) => {
     const isLoopingThisEntry =
-      scannerState.loopingPlayback &&
-      scannerState.loopingHistoryEntryId &&
-      scannerState.loopingHistoryEntryId === entry.id;
+      scannerState.historyLoopEntryId &&
+      scannerState.historyLoopEntryId === entry.id &&
+      scannerState.historyLoopAudio &&
+      !scannerState.historyLoopAudio.paused;
 
     const li = document.createElement("li");
     li.className =
@@ -1558,10 +1561,37 @@ function stopLoopPlayback({ updateButton = true } = {}) {
     dom.previewAudio.currentTime = 0;
   }
   scannerState.loopingPlayback = false;
-  scannerState.loopingHistoryEntryId = null;
   if (updateButton) {
     updateLoopButtonState();
   }
+}
+
+function stopHistoryLoopPlayback({ rerender = true } = {}) {
+  if (scannerState.historyLoopAudio) {
+    scannerState.historyLoopAudio.pause();
+    scannerState.historyLoopAudio.currentTime = 0;
+    scannerState.historyLoopAudio.src = "";
+    scannerState.historyLoopAudio = null;
+  }
+  if (scannerState.historyLoopObjectUrl) {
+    URL.revokeObjectURL(scannerState.historyLoopObjectUrl);
+    scannerState.historyLoopObjectUrl = null;
+  }
+  scannerState.historyLoopEntryId = null;
+  if (rerender) {
+    renderEncodeHistory();
+  }
+}
+
+function encodePayloadToWavBlob(payload, protocolId) {
+  const waveform = scannerState.ggwave.encode(scannerState.ggwaveInstance, payload, protocolId, 10);
+  if (!waveform || !waveform.length) {
+    throw new Error("Empty waveform from ggwave");
+  }
+  const waveformCopy = new Int8Array(waveform);
+  const int16Samples = new Int16Array(waveformCopy.buffer.slice(0));
+  const scaledSamples = applyGainToSamples(int16Samples, scannerState.encodeGain) || int16Samples;
+  return createWavBlob(scaledSamples, scannerState.sampleRate);
 }
 
 function toggleLoopPlayback() {
@@ -1726,15 +1756,13 @@ async function handleHistoryAction(entry, intent) {
     return;
   }
 
-  if (
-    intent === "loop" &&
-    scannerState.loopingPlayback &&
-    scannerState.loopingHistoryEntryId &&
-    scannerState.loopingHistoryEntryId === entry.id
-  ) {
-    stopLoopPlayback({ updateButton: false });
-    updateLoopButtonState();
-    renderEncodeHistory();
+  const isLoopingThisEntry =
+    scannerState.historyLoopEntryId &&
+    scannerState.historyLoopEntryId === entry.id &&
+    scannerState.historyLoopAudio &&
+    !scannerState.historyLoopAudio.paused;
+  if (intent === "loop" && isLoopingThisEntry) {
+    stopHistoryLoopPlayback();
     showToast("Looping stopped.");
     return;
   }
@@ -1770,30 +1798,61 @@ async function handleHistoryAction(entry, intent) {
     return;
   }
 
+  let historyBlob;
   try {
-    const waveform = scannerState.ggwave.encode(scannerState.ggwaveInstance, payload, protocolId, 10);
-    if (!waveform || !waveform.length) {
-      throw new Error("Empty waveform from ggwave");
-    }
-    const waveformCopy = new Int8Array(waveform);
-    const int16Samples = new Int16Array(waveformCopy.buffer.slice(0));
-    applyEncodedAudio(int16Samples, { sourceText: payload, skipHistory: true });
+    historyBlob = encodePayloadToWavBlob(payload, protocolId);
   } catch (err) {
     console.error("Failed to regenerate sound from history", err);
     showToast("Unable to prepare this sound. Try regenerating it manually.");
     return;
   }
 
+  const objectUrl = URL.createObjectURL(historyBlob);
   if (intent === "play") {
-    scannerState.loopingHistoryEntryId = null;
-    playEncodedAudio();
+    const audio = new Audio(objectUrl);
+    audio.loop = false;
+    const cleanup = () => {
+      URL.revokeObjectURL(objectUrl);
+      audio.onended = null;
+      audio.onerror = null;
+    };
+    audio.onended = cleanup;
+    audio.onerror = cleanup;
+    audio.play().catch((err) => {
+      cleanup();
+      console.warn("History playback failed", err);
+      showToast("Playback blocked — press play on the audio controls.");
+    });
+    return;
   } else if (intent === "loop") {
-    stopLoopPlayback({ updateButton: false });
-    toggleLoopPlayback();
-    scannerState.loopingHistoryEntryId = scannerState.loopingPlayback ? entry.id : null;
+    stopHistoryLoopPlayback({ rerender: false });
+    const loopAudio = new Audio(objectUrl);
+    loopAudio.loop = true;
+    loopAudio.currentTime = 0;
+    scannerState.historyLoopAudio = loopAudio;
+    scannerState.historyLoopObjectUrl = objectUrl;
+    scannerState.historyLoopEntryId = entry.id;
     renderEncodeHistory();
+    loopAudio.play().then(() => {
+      showToast("Looping playback started.");
+    }).catch((err) => {
+      console.warn("History loop playback failed", err);
+      stopHistoryLoopPlayback();
+      showToast("Playback blocked — press play on the audio controls.");
+    });
+    return;
   } else if (intent === "download") {
-    handleDownloadSound();
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = "audio-link.wav";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+    return;
+  } else {
+    URL.revokeObjectURL(objectUrl);
+    return;
   }
 }
 
@@ -2364,6 +2423,7 @@ function wireEvents() {
 
   dom.headerLogout?.addEventListener("click", async () => {
     await performLogout();
+    stopHistoryLoopPlayback({ rerender: false });
     scannerState.user = null;
     resetBillingState();
     applyUserState();
@@ -2430,6 +2490,7 @@ function wireEvents() {
   });
 
   window.addEventListener("beforeunload", () => {
+    stopHistoryLoopPlayback({ rerender: false });
     resetCountdown();
     cleanupRecordingNodes();
     stopStream();
