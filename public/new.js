@@ -1052,6 +1052,13 @@ function updateLoopButtonState() {
   }
 }
 
+function syncLoopPlaybackFromPreviewAudio() {
+  if (!dom.previewAudio) return;
+  const loopActive = !!(dom.previewAudio.loop && !dom.previewAudio.paused && !dom.previewAudio.ended);
+  scannerState.loopingPlayback = loopActive;
+  updateLoopButtonState();
+}
+
 function updatePlayButtonState() {
   if (!dom.playButton) return;
   const hasAudio = !!scannerState.encodedBlob;
@@ -1113,6 +1120,8 @@ function toggleLoopPlayback() {
     showToast("Generate a sound link first.");
     return;
   }
+
+  syncLoopPlaybackFromPreviewAudio();
 
   if (scannerState.loopingPlayback) {
     stopLoopPlayback();
@@ -1319,11 +1328,14 @@ async function handleHistoryAction(entry, intent) {
   const isLoopingThisEntry =
     scannerState.historyLoopEntryId &&
     scannerState.historyLoopEntryId === entry.id &&
-    scannerState.historyLoopAudio;
+    scannerState.historyLoopAudio &&
+    !scannerState.historyLoopAudio.paused;
   const isPlayingThisEntry =
     scannerState.historyPlayEntryId &&
     scannerState.historyPlayEntryId === entry.id &&
-    scannerState.historyPlayAudio;
+    scannerState.historyPlayAudio &&
+    !scannerState.historyPlayAudio.paused &&
+    !scannerState.historyPlayAudio.ended;
   if (intent === "loop" && isLoopingThisEntry) {
     stopHistoryLoopPlayback();
     showToast("Looping stopped.");
@@ -2101,6 +2113,9 @@ function wireEvents() {
   dom.previewAudio?.addEventListener("play", updatePlayButtonState);
   dom.previewAudio?.addEventListener("pause", updatePlayButtonState);
   dom.previewAudio?.addEventListener("ended", updatePlayButtonState);
+  dom.previewAudio?.addEventListener("play", syncLoopPlaybackFromPreviewAudio);
+  dom.previewAudio?.addEventListener("pause", syncLoopPlaybackFromPreviewAudio);
+  dom.previewAudio?.addEventListener("ended", syncLoopPlaybackFromPreviewAudio);
 
   dom.playLoopButton?.addEventListener("click", () => {
     toggleLoopPlayback();
