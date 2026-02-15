@@ -58,7 +58,6 @@ export const selectors = {
   historyList: "#encode-history-list",
   historyEmpty: "#encode-history-empty",
   historyCount: "#encode-history-count",
-  historyShowMore: "#encode-history-show-more",
   heroLogin: "#hero-login",
   dashboardScanButton: "#dashboard-scan-button",
   lastDecodeCard: "#last-decode-card",
@@ -144,7 +143,6 @@ export function cacheDom(dom) {
   dom.historyList = document.querySelector(selectors.historyList);
   dom.historyEmpty = document.querySelector(selectors.historyEmpty);
   dom.historyCount = document.querySelector(selectors.historyCount);
-  dom.historyShowMore = document.querySelector(selectors.historyShowMore);
   dom.heroLogin = document.querySelector(selectors.heroLogin);
   dom.dashboardScanButton = document.querySelector(selectors.dashboardScanButton);
   dom.lastDecodeCard = document.querySelector(selectors.lastDecodeCard);

@@ -71,7 +71,6 @@ const scannerState = {
   historyPlayObjectUrl: null,
   historyPlayEntryId: null,
   currentHistoryEntryId: null,
-  showAllHistory: false,
   encodeHistory: [],
   billing: {
     plan: "free",
@@ -198,7 +197,6 @@ function renderEncodeHistory() {
     dom,
     onHistoryAction: handleHistoryAction,
     showToast,
-    normalizeUrl,
   });
 }
 
@@ -470,7 +468,6 @@ function applyUserState() {
     if (dom.encodeInput) {
       dom.encodeInput.value = loadEncodeDraft();
     }
-    scannerState.showAllHistory = false;
     loadEncodeHistory();
     renderEncodeHistory();
     updateDashboardStats();
@@ -486,7 +483,6 @@ function applyUserState() {
     if (dom.historyList) dom.historyList.innerHTML = "";
     if (dom.historyEmpty) dom.historyEmpty.classList.remove("hidden");
     if (dom.historyCount) dom.historyCount.textContent = "0 items";
-    if (dom.historyShowMore) dom.historyShowMore.classList.add("hidden");
     updateDashboardStats();
     updateLastResultDisplays("None");
   }

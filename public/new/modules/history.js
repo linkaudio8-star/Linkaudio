@@ -1,5 +1,4 @@
 export const MAX_HISTORY_ITEMS = 12;
-const VISIBLE_HISTORY_ITEMS = 3;
 
 export function getEncodeHistoryKey(scannerState) {
   if (!scannerState.user || !scannerState.user.email) return null;
@@ -98,41 +97,20 @@ export function renderEncodeHistory({
   dom,
   onHistoryAction,
   showToast,
-  normalizeUrl,
 }) {
   if (!dom.historyList || !dom.historyEmpty || !dom.historyCount) return;
   const items = scannerState.encodeHistory;
   dom.historyList.innerHTML = "";
 
-  const hasHiddenItems = items.length > VISIBLE_HISTORY_ITEMS;
-  const visibleItems = scannerState.showAllHistory ? items : items.slice(0, VISIBLE_HISTORY_ITEMS);
-
   if (!items.length) {
     dom.historyEmpty.classList.remove("hidden");
     dom.historyCount.textContent = "0 items";
-    if (dom.historyShowMore) {
-      dom.historyShowMore.classList.add("hidden");
-    }
     return;
   }
 
   const totalScans = items.reduce((acc, item) => acc + (Number(item.scanCount) || 0), 0);
   dom.historyEmpty.classList.add("hidden");
   dom.historyCount.textContent = `${items.length} item${items.length === 1 ? "" : "s"} • ${totalScans} scan${totalScans === 1 ? "" : "s"}`;
-
-  if (dom.historyShowMore) {
-    if (hasHiddenItems) {
-      dom.historyShowMore.classList.remove("hidden");
-      dom.historyShowMore.textContent = scannerState.showAllHistory ? "Show less" : "Show more";
-      dom.historyShowMore.onclick = () => {
-        scannerState.showAllHistory = !scannerState.showAllHistory;
-        renderEncodeHistory({ scannerState, dom, onHistoryAction, showToast, normalizeUrl });
-      };
-    } else {
-      dom.historyShowMore.classList.add("hidden");
-      dom.historyShowMore.onclick = null;
-    }
-  }
 
   const createIconButton = (label, svgMarkup, handler, className = "") => {
     const button = document.createElement("button");
@@ -144,7 +122,7 @@ export function renderEncodeHistory({
     return button;
   };
 
-  visibleItems.forEach((entry) => {
+  items.forEach((entry) => {
     const isPlayingThisEntry =
       scannerState.historyPlayEntryId &&
       scannerState.historyPlayEntryId === entry.id &&
