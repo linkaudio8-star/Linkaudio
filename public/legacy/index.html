@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AudioLink</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="bg-gradient"></div>
+    <header class="site-header">
+      <div class="brand">
+        <span class="brand__logo">🔊</span>
+        <span class="brand__name">AudioLink</span>
+      </div>
+      <nav class="site-nav">
+        <button class="nav-button" data-action="open-auth">Login</button>
+      </nav>
+    </header>
+    <main>
+      <section id="landing-view" class="view active">
+        <div class="hero-card">
+          <h1>Scan the air for sound links.</h1>
+          <p>
+            AudioLink lets you encode any message into sound and decode hidden
+            transmissions around you. It’s seamless, playful, and works
+            anywhere.
+          </p>
+          <div class="hero-actions">
+            <button class="primary" data-action="scroll-to-scan">Scan Now</button>
+            <button class="secondary" data-action="open-encode">
+              Generate Sound
+            </button>
+          </div>
+          <div class="hero-footnote">
+            <span class="pulse-dot"></span>
+            Ambient scan ready — tap to start listening.
+          </div>
+        </div>
+        <div class="hero-visual">
+          <div class="waveform">
+            <span></span><span></span><span></span><span></span><span></span
+            ><span></span><span></span><span></span>
+          </div>
+        </div>
+        <div
+          class="panel landing-decode"
+          data-role="decode-panel"
+        >
+          <div class="panel-heading">
+            <h2>Quick Scan</h2>
+            <p>Listen for encoded audio links instantly.</p>
+          </div>
+          <div class="recorder-status">
+            <span class="status-indicator" data-indicator></span>
+            <span data-status>Idle — ready to scan</span>
+          </div>
+          <div class="button-row">
+            <button class="primary" data-action="start-recording">
+              Start Listening
+            </button>
+            <button class="ghost" data-action="stop-recording" disabled>
+              Stop
+            </button>
+          </div>
+          <div class="mode-toggle" data-mode-toggle>
+            <span class="mode-toggle__label">Listening Mode</span>
+            <div class="mode-toggle__options">
+              <button type="button" class="mode-option" data-mode-option="audible">
+                Audible
+              </button>
+              <button type="button" class="mode-option" data-mode-option="ultrasound">
+                Ultrasound
+              </button>
+            </div>
+            <p class="mode-toggle__note" data-mode-note>
+              Audible — listen for hearable chirps.
+            </p>
+          </div>
+          <div class="result-card hidden" data-result>
+            <div class="result-header">
+              <h3>Decoded Message</h3>
+              <button class="copy-button" data-action="copy-decoded">
+                Copy text
+              </button>
+            </div>
+            <p data-decoded-text></p>
+            <div class="link-preview hidden" data-link-preview>
+              <a data-link-anchor href="#" target="_blank" rel="noopener noreferrer">
+                <div class="link-preview__image hidden" data-link-image-wrapper>
+                  <img data-link-image alt="Link preview" />
+                </div>
+                <div class="link-preview__content">
+                  <p class="link-preview__host" data-link-host></p>
+                  <h4 class="link-preview__title" data-link-title></h4>
+                  <p class="link-preview__description" data-link-description></p>
+                </div>
+              </a>
+            </div>
+          </div>
+          <canvas class="audio-visualiser" height="80"></canvas>
+          <div class="history-card" data-history>
+            <div class="history-heading">
+              <h4>Recent Scans</h4>
+            </div>
+            <p class="history-empty" data-history-empty>No link scans yet.</p>
+            <ul class="history-list" data-history-list></ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="auth-view" class="view">
+        <div class="auth-card">
+          <h2>Welcome back</h2>
+          <p>Log in or create an account to start linking sounds.</p>
+          <form id="auth-form">
+            <label for="auth-email">Email</label>
+            <input
+              type="email"
+              id="auth-email"
+              name="email"
+              placeholder="you@example.com"
+              required
+            />
+            <label for="auth-password">Password</label>
+            <input
+              type="password"
+              id="auth-password"
+              name="password"
+              placeholder="••••••••"
+              required
+              minlength="6"
+            />
+            <button type="submit" class="primary full">Continue</button>
+          </form>
+          <button class="secondary full" data-action="back-home">
+            Back to landing
+          </button>
+        </div>
+      </section>
+
+      <section id="dashboard-view" class="view">
+        <div class="dashboard-header">
+          <div>
+            <h2>Your Sound Studio</h2>
+            <p>Encode text into audio or decode signals around you.</p>
+          </div>
+          <button class="secondary" data-action="logout">Log out</button>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" data-tab="encode">Encode</button>
+          <button class="tab" data-tab="decode">Decode</button>
+        </div>
+
+        <div class="tab-content active" data-content="encode">
+          <div class="panel">
+            <label for="encode-input">Text to encode</label>
+            <textarea
+              id="encode-input"
+              rows="5"
+              placeholder="Type your secret message..."
+            ></textarea>
+            <div class="mode-toggle" data-mode-toggle>
+              <span class="mode-toggle__label">Transmission</span>
+              <div class="mode-toggle__options">
+                <button type="button" class="mode-option" data-mode-option="audible">
+                  Audible
+                </button>
+                <button type="button" class="mode-option" data-mode-option="ultrasound">
+                  Ultrasound
+                </button>
+              </div>
+              <p class="mode-toggle__note" data-mode-note>
+                Audible — hearable chirps suitable for most devices.
+              </p>
+            </div>
+            <div class="button-row">
+              <button class="primary" id="generate-sound">Generate Sound</button>
+              <button class="ghost" id="play-sound" disabled>Play</button>
+              <button class="ghost" id="download-sound" disabled>
+                Download WAV
+              </button>
+            </div>
+            <audio id="preview-audio" controls hidden></audio>
+            <div class="history-card" data-encode-history>
+              <div class="history-heading">
+                <h4>Created Links</h4>
+              </div>
+              <p class="history-empty" data-encode-history-empty>No generated links yet.</p>
+              <ul class="history-list" data-encode-history-list></ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-content" data-content="decode">
+          <div class="panel" data-role="decode-panel">
+            <div class="recorder-status">
+              <span class="status-indicator" data-indicator></span>
+              <span data-status>Idle — ready to scan</span>
+            </div>
+          <div class="button-row">
+            <button class="primary" data-action="start-recording">
+              Start Listening
+            </button>
+            <button class="ghost" data-action="stop-recording" disabled>
+              Stop
+            </button>
+          </div>
+          <div class="mode-toggle" data-mode-toggle>
+            <span class="mode-toggle__label">Listening Mode</span>
+            <div class="mode-toggle__options">
+              <button type="button" class="mode-option" data-mode-option="audible">
+                Audible
+              </button>
+              <button type="button" class="mode-option" data-mode-option="ultrasound">
+                Ultrasound
+              </button>
+            </div>
+            <p class="mode-toggle__note" data-mode-note>
+              Audible — listen for hearable chirps.
+            </p>
+          </div>
+          <div class="result-card hidden" data-result>
+              <div class="result-header">
+                <h3>Decoded Message</h3>
+                <button class="copy-button" data-action="copy-decoded">
+                  Copy text
+                </button>
+              </div>
+              <p data-decoded-text></p>
+              <div class="link-preview hidden" data-link-preview>
+                <a data-link-anchor href="#" target="_blank" rel="noopener noreferrer">
+                  <div class="link-preview__image hidden" data-link-image-wrapper>
+                    <img data-link-image alt="Link preview" />
+                  </div>
+                  <div class="link-preview__content">
+                    <p class="link-preview__host" data-link-host></p>
+                    <h4 class="link-preview__title" data-link-title></h4>
+                    <p class="link-preview__description" data-link-description></p>
+                  </div>
+                </a>
+              </div>
+            </div>
+            <canvas class="audio-visualiser" height="80"></canvas>
+            <div class="history-card" data-history>
+              <div class="history-heading">
+                <h4>Recent Scans</h4>
+              </div>
+              <p class="history-empty" data-history-empty>No link scans yet.</p>
+              <ul class="history-list" data-history-list></ul>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast"></div>
+
+    <script src="../vendor/ggwave.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

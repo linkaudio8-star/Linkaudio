@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AudioLink · New Experience</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              "sound-cyan": "#55d7ff",
+              "sound-purple": "#9f5cff",
+              "sound-blue": "#2f46ff",
+              "sound-surface": "#f7f9fc",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top right, #f2f6ff 0%, #ffffff 45%);
+        color: #101828;
+      }
+      .hero-background::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(47, 70, 255, 0.08), transparent 60%);
+        pointer-events: none;
+      }
+      .sound-wave-bar {
+        animation: sound-wave 1s ease-in-out infinite;
+        transform-origin: bottom center;
+      }
+      @keyframes sound-wave {
+        0%,
+        100% {
+          transform: scaleY(0.6);
+          opacity: 0.6;
+        }
+        50% {
+          transform: scaleY(1);
+          opacity: 1;
+        }
+      }
+      .scan-toast {
+        transition: opacity 0.4s ease;
+      }
+      .gradient-text {
+        background: linear-gradient(90deg, #55d7ff, #9f5cff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .section-heading {
+        background: linear-gradient(90deg, rgba(47, 70, 255, 0.08), transparent);
+      }
+    </style>
+  </head>
+  <body class="antialiased" data-page="index">
+    <div class="absolute inset-0 -z-10 hero-background"></div>
+
+    <header class="w-full">
+      <div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-8">
+        <a href="/" class="flex items-center gap-2 text-xl font-semibold">
+          <span class="text-2xl">🔊</span>
+          AudioLink
+        </a>
+        <nav class="hidden items-center gap-6 text-sm md:flex">
+          <a href="#how-it-works" class="text-slate-500 hover:text-slate-700">How it works</a>
+          <a href="#preview" class="text-slate-500 hover:text-slate-700">Dashboard</a>
+          <a href="#pricing" class="text-slate-500 hover:text-slate-700">Pricing</a>
+          <a href="#about" class="text-slate-500 hover:text-slate-700">About</a>
+        </nav>
+        <div class="flex items-center gap-3">
+          <button
+            id="header-login"
+            type="button"
+            data-auth-trigger="login"
+            class="hidden cursor-pointer rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:border-slate-300 hover:text-slate-800 md:inline-flex"
+          >
+            Sign in
+          </button>
+          <div
+            id="header-user"
+            role="button"
+            tabindex="0"
+            aria-label="Open AudioLink Studio dashboard"
+            class="hidden items-center gap-3 rounded-full bg-white/60 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-sound-blue/50 cursor-pointer"
+          >
+            <span id="header-user-email"></span>
+            <button
+              id="header-logout"
+              class="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-500 hover:text-slate-800"
+            >
+              Log out
+            </button>
+          </div>
+          <button
+            id="header-get-started"
+            type="button"
+            data-auth-trigger="register"
+            class="rounded-full bg-black px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-slate-900/10 hover:opacity-90"
+          >
+            Get started
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto mt-12 flex w-full max-w-6xl flex-col gap-24 px-6 pb-24">
+      <div id="checkout-success-card" class="hidden rounded-3xl border border-emerald-100 bg-emerald-50/80 p-6 shadow-lg shadow-emerald-500/10">
+        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p class="text-sm font-semibold uppercase tracking-wide text-emerald-500">Payment confirmed</p>
+            <h2 class="mt-1 text-2xl font-semibold text-emerald-900">Welcome to AudioLink Pro</h2>
+            <p class="mt-2 text-sm text-emerald-700">
+              Your subscription is active. Session ID: <span id="checkout-success-session" class="font-mono text-emerald-900"></span>
+            </p>
+          </div>
+          <div class="flex flex-col gap-2 sm:flex-row">
+            <a href="/new/admin.html" class="inline-flex items-center justify-center rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
+              Open Studio
+            </a>
+            <button type="button" id="checkout-success-dismiss" class="inline-flex items-center justify-center rounded-full border border-emerald-200 px-4 py-2 text-sm font-semibold text-emerald-700 hover:border-emerald-300">
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
+      <div id="checkout-cancel-card" class="hidden rounded-3xl border border-rose-100 bg-rose-50/80 p-6 shadow-lg shadow-rose-500/10">
+        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p class="text-sm font-semibold uppercase tracking-wide text-rose-500">Checkout cancelled</p>
+            <h2 class="mt-1 text-2xl font-semibold text-rose-900">You exited the payment flow</h2>
+            <p class="mt-2 text-sm text-rose-700">You can retry at any time—your spot is saved.</p>
+          </div>
+          <div class="flex flex-col gap-2 sm:flex-row">
+            <button type="button" data-upgrade-plan="pro" class="inline-flex items-center justify-center rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-700">
+              Retry Checkout
+            </button>
+            <button type="button" id="checkout-cancel-dismiss" class="inline-flex items-center justify-center rounded-full border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 hover:border-rose-300">
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
+      <section
+        class="relative flex flex-col items-center gap-14 rounded-3xl bg-white/70 p-12 shadow-xl shadow-slate-900/5 lg:flex-row"
+      >
+        <div class="w-full space-y-8 lg:w-1/2">
+          <p class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600">
+            <span class="h-2 w-2 rounded-full bg-sound-cyan"></span>
+            New Air-Link Experience
+          </p>
+          <h1 class="text-4xl font-bold leading-tight text-slate-900 sm:text-5xl">
+            Scan the air for <span class="gradient-text">sound links</span>
+          </h1>
+          <p class="text-lg leading-relaxed text-slate-600">
+            Convert any digital link into immersive audio signals and decode them back with your microphone. The
+            futuristic alternative to QR codes — no cameras required.
+          </p>
+          <div class="flex flex-col gap-3 sm:flex-row">
+            <button
+              id="scan-now-button"
+              class="inline-flex items-center justify-center gap-3 rounded-full bg-gradient-to-r from-sound-blue via-sound-purple to-sound-cyan px-8 py-3 text-base font-semibold text-white shadow-lg shadow-sound-blue/20 transition hover:shadow-xl"
+              type="button"
+            >
+              <span
+                id="scan-button-spinner"
+                class="hidden h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent inline-flex flex-shrink-0"
+              ></span>
+              <span id="scan-button-icon" class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/20">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.8"
+                    d="M12 1v4m0 14v4m10-10h-4M6 12H2m15.364-6.364l-2.828 2.828M9.464 14.536l-2.828 2.828m0-11.312l2.828 2.828m7.072 7.072l2.828 2.828"
+                  />
+                </svg>
+              </span>
+              <span id="scan-button-label">Scan Now</span>
+            </button>
+            <button
+              id="hero-login"
+              data-auth-trigger="login"
+              class="inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 px-8 py-3 text-base font-semibold text-slate-700 hover:border-slate-300 hover:text-slate-900"
+              type="button"
+            >
+              Login to Create
+            </button>
+          </div>
+          <p id="inline-scan-status" class="text-sm text-slate-500"></p>
+          <div class="flex flex-wrap gap-4 text-sm text-slate-500">
+            <div class="flex items-center gap-2">
+              <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+              Works offline
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="h-2 w-2 rounded-full bg-sound-purple"></span>
+              Ultrasound capable
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="h-2 w-2 rounded-full bg-sound-cyan"></span>
+              Secure by design
+            </div>
+          </div>
+          <div
+            id="last-decode-card"
+            class="hidden rounded-2xl border border-slate-100 bg-slate-50/80 p-4 text-left shadow-inner shadow-slate-900/5"
+          >
+            <p class="text-xs uppercase tracking-wide text-slate-400">Latest scan</p>
+            <p id="last-decode-text" class="mt-2 break-words text-sm font-medium text-slate-800"></p>
+            <a
+              id="last-decode-link"
+              class="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-sound-blue hover:underline"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+            ></a>
+          </div>
+        </div>
+        <div class="relative w-full overflow-hidden rounded-3xl bg-sound-surface p-10 lg:w-1/2">
+          <div class="absolute -top-16 -right-12 h-40 w-40 rounded-full bg-gradient-to-br from-sound-cyan/40 to-transparent blur-3xl"></div>
+          <div class="absolute -bottom-20 -left-4 h-48 w-48 rounded-full bg-gradient-to-br from-sound-purple/40 to-transparent blur-3xl"></div>
+          <div class="relative grid gap-6">
+            <div class="rounded-2xl border border-white/50 bg-white/90 p-6 shadow-lg shadow-slate-900/5">
+              <div class="flex items-center justify-between">
+                <p class="text-sm font-semibold text-slate-500">Live Scan</p>
+                <span class="flex items-center gap-2 rounded-full bg-sound-cyan/10 px-3 py-1 text-xs font-medium text-sound-blue">
+                  Listening
+                </span>
+              </div>
+              <div class="mt-6 flex items-end justify-between gap-1">
+                <div data-scan-wave class="sound-wave-bar h-16 w-1 rounded-full bg-gradient-to-t from-sound-blue to-sound-cyan"></div>
+                <div data-scan-wave class="sound-wave-bar h-20 w-1 rounded-full bg-gradient-to-t from-sound-blue to-sound-cyan"></div>
+                <div data-scan-wave class="sound-wave-bar h-14 w-1 rounded-full bg-gradient-to-t from-sound-blue to-sound-cyan"></div>
+                <div data-scan-wave class="sound-wave-bar h-22 w-1 rounded-full bg-gradient-to-t from-sound-blue to-sound-cyan"></div>
+                <div data-scan-wave class="sound-wave-bar h-18 w-1 rounded-full bg-gradient-to-t from-sound-blue to-sound-cyan"></div>
+                <div data-scan-wave class="sound-wave-bar h-24 w-1 rounded-full bg-gradient-to-t from-sound-blue to-sound-cyan"></div>
+                <div data-scan-wave class="sound-wave-bar h-16 w-1 rounded-full bg-gradient-to-t from-sound-blue to-sound-cyan"></div>
+                <div data-scan-wave class="sound-wave-bar h-20 w-1 rounded-full bg-gradient-to-t from-sound-blue to-sound-cyan"></div>
+                <div data-scan-wave class="sound-wave-bar h-14 w-1 rounded-full bg-gradient-to-t from-sound-blue to-sound-cyan"></div>
+                <div data-scan-wave class="sound-wave-bar h-22 w-1 rounded-full bg-gradient-to-t from-sound-blue to-sound-cyan"></div>
+                <div data-scan-wave class="sound-wave-bar h-18 w-1 rounded-full bg-gradient-to-t from-sound-blue to-sound-cyan"></div>
+                <div data-scan-wave class="sound-wave-bar h-24 w-1 rounded-full bg-gradient-to-t from-sound-blue to-sound-cyan"></div>
+              </div>
+              <p class="mt-4 text-xs uppercase tracking-wide text-slate-400">Ambient audio visualization</p>
+            </div>
+            <div class="rounded-2xl border border-white/60 bg-white/80 p-6 shadow-lg shadow-slate-900/5 backdrop-blur">
+              <p class="text-sm font-semibold text-slate-600">Recent Detection</p>
+              <div class="mt-4 space-y-2">
+                <p class="font-medium text-slate-900">openai.com/chatgpt</p>
+                <p class="text-sm text-slate-500">
+                  “ChatGPT by OpenAI — A conversational AI experience available now.”
+                </p>
+              </div>
+              <div class="mt-4 flex items-center justify-between text-xs text-slate-400">
+                <span>Detected 12s ago</span>
+                <span>Ultrasound mode</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="how-it-works" class="space-y-12">
+        <div class="section-heading inline-flex items-center gap-3 rounded-full px-4 py-2 text-sm font-medium text-slate-600">
+          <span class="flex h-6 w-6 items-center justify-center rounded-full bg-sound-cyan/15 text-sound-blue">1</span>
+          How it works
+        </div>
+        <div class="grid gap-10 md:grid-cols-3">
+          <div class="rounded-3xl bg-white/80 p-8 shadow-lg shadow-slate-900/5">
+            <div class="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-sound-cyan/10">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-sound-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 4l2 4 4 .5-3 3 1 4-4-2-4 2 1-4-3-3 4-.5z" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-900">Encode any link</h3>
+            <p class="mt-3 text-sm text-slate-500">
+              Paste your URL into AudioLink Studio and instantly transform it into a sonic signature ready for sharing.
+            </p>
+          </div>
+          <div class="rounded-3xl bg-white/80 p-8 shadow-lg shadow-slate-900/5">
+            <div class="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-sound-purple/10">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-sound-purple" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-900">Broadcast or play</h3>
+            <p class="mt-3 text-sm text-slate-500">
+              Play the audio over speakers or devices. It works in audible and ultrasonic ranges for flexible experiences.
+            </p>
+          </div>
+          <div class="rounded-3xl bg-white/80 p-8 shadow-lg shadow-slate-900/5">
+            <div class="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-sound-blue/10">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-sound-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 19V6h13v13H9zm-4 0h13" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-900">Scan & decode</h3>
+            <p class="mt-3 text-sm text-slate-500">
+              Tap “Scan now” and AudioLink will listen for the sound signature—decoded links appear instantly below.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="preview" class="grid items-center gap-10 rounded-3xl bg-white/70 p-10 shadow-xl shadow-slate-900/5 lg:grid-cols-2">
+        <div class="space-y-6">
+          <h2 class="text-3xl font-semibold text-slate-900">Reimagined dashboard for your audio links</h2>
+          <p class="text-base leading-relaxed text-slate-600">
+            Track scans, manage campaigns, and switch between audible and ultrasonic modes. The new dashboard brings
+            clarity to every sonic interaction.
+          </p>
+          <ul class="space-y-3 text-sm text-slate-500">
+            <li class="flex items-center gap-3">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sound-cyan/15 text-xs font-semibold text-sound-blue">1</span>
+              Real-time analytics for every shared sound
+            </li>
+            <li class="flex items-center gap-3">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sound-purple/15 text-xs font-semibold text-sound-purple">2</span>
+              Link management with customizable metadata
+            </li>
+            <li class="flex items-center gap-3">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sound-blue/15 text-xs font-semibold text-sound-blue">3</span>
+              Team collaboration and role-based controls
+            </li>
+          </ul>
+        </div>
+        <div class="rounded-3xl border border-white/60 bg-sound-surface p-6 shadow-xl shadow-slate-900/10">
+          <div
+            class="flex h-full min-h-[260px] w-full flex-col items-center justify-center rounded-2xl border border-white/70 bg-gradient-to-br from-sound-cyan/20 via-white to-sound-purple/20 p-8 text-center text-slate-700"
+          >
+            <span class="mb-3 inline-flex items-center justify-center rounded-full bg-white/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Dashboard Preview
+            </span>
+            <h3 class="text-xl font-semibold text-slate-800">Analytics arriving soon</h3>
+            <p class="mt-2 max-w-sm text-sm text-slate-500">
+              Visualise scan performance, top campaigns, and live transmitter health directly in AudioLink Studio.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing" class="space-y-12">
+        <div class="section-heading inline-flex items-center gap-3 rounded-full px-4 py-2 text-sm font-medium text-slate-600">
+          <span class="flex h-6 w-6 items-center justify-center rounded-full bg-sound-purple/15 text-sound-purple">2</span>
+          Pricing
+        </div>
+        <div class="grid gap-8 md:grid-cols-3">
+          <div class="flex flex-col gap-6 rounded-3xl bg-white/75 p-8 shadow-lg shadow-slate-900/5">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-900">Starter</h3>
+              <p class="mt-1 text-sm text-slate-500">For creators and early adopters</p>
+            </div>
+            <div class="text-3xl font-bold text-slate-900">
+              $0<span class="text-base font-normal text-slate-400">/month</span>
+            </div>
+            <ul class="space-y-3 text-sm text-slate-500">
+              <li>• 25 scans / month</li>
+              <li>• Ultrasound scanning (silent mode)</li>
+              <li>• Create and share audio links</li>
+              <li>• Basic analytics</li>
+              <li>• Community support</li>
+            </ul>
+            <button
+              type="button"
+              data-auth-trigger="register"
+              class="mt-auto inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
+            >
+              Start for free
+            </button>
+          </div>
+          <div class="flex flex-col gap-6 rounded-3xl border border-sound-purple/30 bg-gradient-to-br from-white via-white to-sound-purple/10 p-8 shadow-xl shadow-sound-purple/10">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-900">Pro</h3>
+              <p class="mt-1 text-sm text-slate-500">For teams and businesses scaling experiences</p>
+            </div>
+            <div class="text-3xl font-bold text-slate-900">
+              $15<span class="text-base font-normal text-slate-400">/month</span>
+            </div>
+            <ul class="space-y-3 text-sm text-slate-500">
+              <li>• Unlimited scans</li>
+              <li>• Real-time dashboard and advanced analytics</li>
+              <li>• Campaign insights</li>
+              <li>• Priority support</li>
+            </ul>
+            <button
+              type="button"
+              data-upgrade-plan="pro"
+              class="mt-auto inline-flex items-center justify-center rounded-full bg-sound-blue px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-sound-blue/30 hover:opacity-90"
+            >
+              Upgrade to Pro
+            </button>
+          </div>
+          <div class="flex flex-col gap-6 rounded-3xl bg-white/75 p-8 shadow-lg shadow-slate-900/5">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-900">Enterprise</h3>
+              <p class="mt-1 text-sm text-slate-500">For embedded sonic systems</p>
+            </div>
+            <div class="text-3xl font-bold text-slate-900">Custom</div>
+            <ul class="space-y-3 text-sm text-slate-500">
+              <li>• On-prem deployment</li>
+              <li>• Dedicated ultrasound tuning</li>
+              <li>• SLA & compliance options</li>
+              <li>• White-label experiences</li>
+            </ul>
+            <a
+              href="mailto:hello@audiolink.app"
+              class="mt-auto inline-flex items-center justify-center rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
+            >
+              Contact sales
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="about"
+        class="grid gap-10 rounded-3xl bg-white/75 p-10 shadow-xl shadow-slate-900/5 lg:grid-cols-[1.2fr_0.8fr]"
+      >
+        <div class="space-y-6">
+          <h2 class="text-3xl font-semibold text-slate-900">Designed for ambient experiences</h2>
+          <p class="text-base leading-relaxed text-slate-600">
+            AudioLink lets brands build proximity-based experiences without relying on cameras or codes. Whether you're
+            launching pop-up experiences, powering smart retail, or building playful connections, AudioLink adapts to your
+            environment.
+          </p>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+              <p class="text-sm font-semibold text-slate-700">Offline ready</p>
+              <p class="mt-2 text-sm text-slate-500">No connectivity? Your sonic links still work.</p>
+            </div>
+            <div class="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+              <p class="text-sm font-semibold text-slate-700">Privacy first</p>
+              <p class="mt-2 text-sm text-slate-500">All detection happens locally on the device.</p>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-col justify-between gap-6">
+          <div class="rounded-2xl border border-white/60 bg-sound-surface p-6 shadow-lg shadow-slate-900/10">
+            <p class="text-sm uppercase tracking-wide text-slate-400">Trusted use cases</p>
+            <ul class="mt-4 space-y-3 text-sm text-slate-600">
+              <li>• Live events & conferences</li>
+              <li>• Interactive museums</li>
+              <li>• Smart retail & venues</li>
+              <li>• Private community drops</li>
+            </ul>
+          </div>
+          <div class="rounded-2xl border border-white/60 bg-gradient-to-br from-sound-cyan/15 to-sound-purple/20 p-6 shadow-lg shadow-slate-900/10">
+            <p class="text-base font-semibold text-slate-900">
+              “AudioLink transforms the way we think about proximity experiences. It’s seamless, playful, and
+              privacy-conscious.”
+            </p>
+            <p class="mt-4 text-sm text-slate-500">— Future Interfaces Lab</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-white/60 bg-white/70">
+      <div class="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-8 text-sm text-slate-500 md:flex-row md:items-center md:justify-between">
+        <p>&copy; <span id="footer-year"></span> AudioLink. All rights reserved.</p>
+        <div class="flex items-center gap-4">
+          <a href="/index.html" class="hover:text-slate-800">Classic experience</a>
+          <a href="/privacy" class="hover:text-slate-800">Privacy</a>
+          <a href="/support" class="hover:text-slate-800">Support</a>
+        </div>
+      </div>
+    </footer>
+
+    <div
+      id="scan-toast"
+      class="scan-toast pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-slate-900/90 px-4 py-2 text-sm font-medium text-white opacity-0 shadow-lg"
+    >
+      <span id="scan-toast-message"></span>
+    </div>
+
+    <div
+      id="login-overlay"
+      aria-hidden="true"
+      class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/60 px-4 py-10"
+    >
+      <div class="relative w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl shadow-slate-900/20">
+        <button
+          class="absolute right-6 top-6 rounded-full border border-slate-200 p-2 text-slate-500 hover:text-slate-800"
+          type="button"
+          data-login-action="close"
+          aria-label="Close authentication"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+
+        <div class="text-center space-y-2">
+          <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-lg">🔊</span>
+          <h3 class="text-2xl font-semibold text-slate-900">Access AudioLink Studio</h3>
+          <p class="text-sm text-slate-500">Create an account or sign in to manage your sound links.</p>
+        </div>
+
+        <div class="mt-6 flex items-center gap-2 rounded-full bg-slate-100 p-1 text-sm font-medium text-slate-500">
+          <button
+            type="button"
+            data-auth-mode-tab="login"
+            class="flex-1 rounded-full px-3 py-2 text-center transition"
+          >
+            Sign in
+          </button>
+          <button
+            type="button"
+            data-auth-mode-tab="register"
+            class="flex-1 rounded-full px-3 py-2 text-center transition"
+          >
+            Create account
+          </button>
+        </div>
+
+        <p id="auth-error" class="mt-4 hidden rounded-2xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600"></p>
+
+        <form id="login-form" data-auth-form="login" class="mt-6 space-y-4">
+          <div class="space-y-2">
+            <label for="login-email" class="text-sm font-medium text-slate-600">Email</label>
+            <input
+              id="login-email"
+              type="email"
+              autocomplete="email"
+              required
+              class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 shadow-inner focus:border-sound-blue focus:outline-none focus:ring-2 focus:ring-sound-blue/30"
+              placeholder="you@example.com"
+            />
+          </div>
+          <div class="space-y-2">
+            <label for="login-password" class="text-sm font-medium text-slate-600">Password</label>
+            <input
+              id="login-password"
+              type="password"
+              autocomplete="current-password"
+              required
+              minlength="6"
+              class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 shadow-inner focus:border-sound-blue focus:outline-none focus:ring-2 focus:ring-sound-blue/30"
+              placeholder="••••••••"
+            />
+          </div>
+          <button
+            type="submit"
+            class="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            Continue
+          </button>
+        </form>
+
+        <form id="register-form" data-auth-form="register" class="mt-6 hidden space-y-4">
+          <div class="space-y-2">
+            <label for="register-email" class="text-sm font-medium text-slate-600">Email</label>
+            <input
+              id="register-email"
+              type="email"
+              autocomplete="email"
+              required
+              class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 shadow-inner focus:border-sound-blue focus:outline-none focus:ring-2 focus:ring-sound-blue/30"
+              placeholder="you@example.com"
+            />
+          </div>
+          <div class="space-y-2">
+            <label for="register-password" class="text-sm font-medium text-slate-600">Password</label>
+            <input
+              id="register-password"
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="6"
+              class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 shadow-inner focus:border-sound-blue focus:outline-none focus:ring-2 focus:ring-sound-blue/30"
+              placeholder="Minimum 6 characters"
+            />
+          </div>
+          <div class="space-y-2">
+            <label for="register-confirm-password" class="text-sm font-medium text-slate-600">Confirm password</label>
+            <input
+              id="register-confirm-password"
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="6"
+              class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 shadow-inner focus:border-sound-blue focus:outline-none focus:ring-2 focus:ring-sound-blue/30"
+              placeholder="Re-enter password"
+            />
+          </div>
+          <button
+            type="submit"
+            class="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full bg-sound-blue px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+          >
+            Create account
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById("footer-year").textContent = new Date().getFullYear();
+    </script>
+    <script src="vendor/ggwave.js?v=20251030"></script>
+    <script src="new.js?v=20251030" defer></script>
+  </body>
+</html>

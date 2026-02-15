@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+.env
+.home/
+
+data/
+data_tmp/
+*.db
+*.db-wal
+*.db-shm
+
+*.log
+smoke.log
+cookies.txt
