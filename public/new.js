@@ -1,3 +1,43 @@
+import {
+  cacheDom as cacheDomFromUi,
+  showToast as showToastFromUi,
+  setButtonLoadingState as setButtonLoadingStateFromUi,
+} from "./new/modules/ui.js";
+import {
+  AUTH_MODES,
+  clearAuthError as clearAuthErrorFromAuth,
+  setAuthError as setAuthErrorFromAuth,
+  setAuthMode as setAuthModeFromAuth,
+  apiRequest as apiRequestFromAuth,
+  fetchActiveSession as fetchActiveSessionFromAuth,
+  performLogin as performLoginFromAuth,
+  performRegister as performRegisterFromAuth,
+  performLogout as performLogoutFromAuth,
+} from "./new/modules/auth.js";
+import {
+  resetBillingState as resetBillingStateFromBilling,
+  hydratePlanFromUser as hydratePlanFromUserFromBilling,
+  updatePlanUI as updatePlanUIFromBilling,
+  refreshBillingStatus as refreshBillingStatusFromBilling,
+  confirmCheckoutSession as confirmCheckoutSessionFromBilling,
+  startPlanCheckout as startPlanCheckoutFromBilling,
+  handleCheckoutNotices as handleCheckoutNoticesFromBilling,
+} from "./new/modules/billing.js";
+import {
+  loadEncodeHistory as loadEncodeHistoryFromHistory,
+  saveEncodeHistory as saveEncodeHistoryFromHistory,
+  renderEncodeHistory as renderEncodeHistoryFromHistory,
+  updateDashboardStats as updateDashboardStatsFromHistory,
+  addEncodeHistoryEntry as addEncodeHistoryEntryFromHistory,
+  incrementEncodeHistoryScanCount as incrementEncodeHistoryScanCountFromHistory,
+} from "./new/modules/history.js";
+import {
+  createWavBlob as createWavBlobFromAudio,
+  applyGainToSamples as applyGainToSamplesFromAudio,
+  stopHistoryLoopPlayback as stopHistoryLoopPlaybackFromAudio,
+  encodePayloadToWavBlob as encodePayloadToWavBlobFromAudio,
+} from "./new/modules/audio.js";
+
 const scannerState = {
   ggwave: null,
   ggwaveInstance: null,
@@ -49,7 +89,6 @@ const ENCODE_GAIN_DEFAULT = 1;
 const ENCODE_GAIN_SLIDER_MIN = Math.round(ENCODE_GAIN_MIN * 100);
 const ENCODE_GAIN_SLIDER_MAX = Math.round(ENCODE_GAIN_MAX * 100);
 const ENCODE_GAIN_STORAGE_KEY = "audiolink-encode-gain";
-let lastEncodeGainStorageKey = null;
 const recorderWorkletSource = `class GGWaveRecorder extends AudioWorkletProcessor {
   process(inputs) {
     if (!inputs || inputs.length === 0) return true;
@@ -70,620 +109,88 @@ const recorderWorkletSource = `class GGWaveRecorder extends AudioWorkletProcesso
 
 registerProcessor('ggwave-recorder', GGWaveRecorder);`;
 
-const selectors = {
-  openScan: "#scan-now-button",
-  overlay: "#scan-overlay",
-  closeButtons: "[data-scan-action='close']",
-  stopButton: "#scan-stop-button",
-  tryAgainButton: "#scan-try-again",
-  openLinkButton: "#scan-open-link",
-  countdown: "#scan-countdown",
-  statusText: "#scan-status",
-  resultText: "#scan-result-text",
-  toast: "#scan-toast",
-  toastMessage: "#scan-toast-message",
-  stateContainers: {
-    scanning: "#scan-state-scanning",
-    success: "#scan-state-success",
-    timeout: "#scan-state-timeout",
-  },
-  waveBars: "[data-scan-wave]",
-  loginOverlay: "#login-overlay",
-  loginForm: "#login-form",
-  loginCloseButtons: "[data-login-action='close']",
-  loginEmail: "#login-email",
-  loginPassword: "#login-password",
-  registerForm: "#register-form",
-  registerEmail: "#register-email",
-  registerPassword: "#register-password",
-  registerConfirmPassword: "#register-confirm-password",
-  authModeTabs: "[data-auth-mode-tab]",
-  authForms: "[data-auth-form]",
-  authError: "#auth-error",
-  authTriggers: "[data-auth-trigger]",
-  headerLogin: "#header-login",
-  headerUser: "#header-user",
-  headerUserEmail: "#header-user-email",
-  headerLogout: "#header-logout",
-  headerGetStarted: "#header-get-started",
-  dashboardUserEmail: "#dashboard-user-email",
-  dashboardModeLabel: "#dashboard-mode-label",
-  dashboardLastResult: "#dashboard-last-result",
-  dashboardTotalLinks: "#dashboard-total-links",
-  dashboardLastGenerated: "#dashboard-last-generated",
-  encodeInput: "#new-encode-input",
-  generateButton: "#new-generate-sound",
-  playButton: "#new-play-sound",
-  playLoopButton: "#new-loop-sound",
-  downloadButton: "#new-download-sound",
-  previewAudio: "#new-preview-audio",
-  encodeVolume: "#encode-volume-slider",
-  encodeVolumeValue: "#encode-volume-value",
-  upgradeButtons: "[data-upgrade-plan]",
-  planPill: "#dashboard-plan-pill",
-  modeLabel: "#mode-toggle-label",
-  modeAudible: "#mode-audible",
-  modeUltrasound: "#mode-ultrasound",
-  historyList: "#encode-history-list",
-  historyEmpty: "#encode-history-empty",
-  historyCount: "#encode-history-count",
-  heroLogin: "#hero-login",
-  dashboardScanButton: "#dashboard-scan-button",
-  lastDecodeCard: "#last-decode-card",
-  lastDecodeText: "#last-decode-text",
-  lastDecodeLink: "#last-decode-link",
-  scanButtonSpinner: "#scan-button-spinner",
-  scanButtonIcon: "#scan-button-icon",
-  scanButtonLabel: "#scan-button-label",
-  inlineScanStatus: "#inline-scan-status",
-  checkoutSuccessCard: "#checkout-success-card",
-  checkoutCancelCard: "#checkout-cancel-card",
-  checkoutSuccessSession: "#checkout-success-session",
-  checkoutSuccessDismiss: "#checkout-success-dismiss",
-  checkoutCancelDismiss: "#checkout-cancel-dismiss",
-};
-
 const dom = {};
 
 function cacheDom() {
-  dom.openScan = document.querySelector(selectors.openScan);
-  dom.overlay = document.querySelector(selectors.overlay);
-  dom.closeButtons = Array.from(document.querySelectorAll(selectors.closeButtons));
-  dom.stopButton = document.querySelector(selectors.stopButton);
-  dom.tryAgainButton = document.querySelector(selectors.tryAgainButton);
-  dom.openLinkButton = document.querySelector(selectors.openLinkButton);
-  dom.countdown = document.querySelector(selectors.countdown);
-  dom.statusText = document.querySelector(selectors.statusText);
-  dom.resultText = document.querySelector(selectors.resultText);
-  dom.toast = document.querySelector(selectors.toast);
-  dom.toastMessage = document.querySelector(selectors.toastMessage);
-  dom.waveBars = Array.from(document.querySelectorAll(selectors.waveBars));
-  dom.stateContainers = {
-    scanning: document.querySelector(selectors.stateContainers.scanning),
-    success: document.querySelector(selectors.stateContainers.success),
-    timeout: document.querySelector(selectors.stateContainers.timeout),
-  };
-  dom.loginOverlay = document.querySelector(selectors.loginOverlay);
-  dom.loginForm = document.querySelector(selectors.loginForm);
-  dom.loginCloseButtons = Array.from(document.querySelectorAll(selectors.loginCloseButtons));
-  dom.loginEmail = document.querySelector(selectors.loginEmail);
-  dom.loginPassword = document.querySelector(selectors.loginPassword);
-  dom.registerForm = document.querySelector(selectors.registerForm);
-  dom.registerEmail = document.querySelector(selectors.registerEmail);
-  dom.registerPassword = document.querySelector(selectors.registerPassword);
-  dom.registerConfirmPassword = document.querySelector(selectors.registerConfirmPassword);
-  dom.authModeTabs = Array.from(document.querySelectorAll(selectors.authModeTabs));
-  dom.authForms = Array.from(document.querySelectorAll(selectors.authForms));
-  dom.authError = document.querySelector(selectors.authError);
-  dom.authTriggers = Array.from(document.querySelectorAll(selectors.authTriggers));
-  dom.headerLogin = document.querySelector(selectors.headerLogin);
-  dom.headerUser = document.querySelector(selectors.headerUser);
-  dom.headerUserEmail = document.querySelector(selectors.headerUserEmail);
-  dom.headerLogout = document.querySelector(selectors.headerLogout);
-  dom.headerGetStarted = document.querySelector(selectors.headerGetStarted);
-  dom.dashboardUserEmail = document.querySelector(selectors.dashboardUserEmail);
-  dom.dashboardModeLabel = document.querySelector(selectors.dashboardModeLabel);
-  dom.dashboardLastResult = document.querySelector(selectors.dashboardLastResult);
-  dom.dashboardTotalLinks = document.querySelector(selectors.dashboardTotalLinks);
-  dom.dashboardLastGenerated = document.querySelector(selectors.dashboardLastGenerated);
-  dom.encodeInput = document.querySelector(selectors.encodeInput);
-  dom.generateButton = document.querySelector(selectors.generateButton);
-  dom.playButton = document.querySelector(selectors.playButton);
-  dom.playLoopButton = document.querySelector(selectors.playLoopButton);
-  dom.playLoopLabel = dom.playLoopButton
-    ? dom.playLoopButton.querySelector("[data-loop-label]")
-    : null;
-  dom.playLoopTrack = dom.playLoopButton
-    ? dom.playLoopButton.querySelector("[data-loop-track]")
-    : null;
-  dom.playLoopKnob = dom.playLoopButton
-    ? dom.playLoopButton.querySelector("[data-loop-knob]")
-    : null;
-  dom.downloadButton = document.querySelector(selectors.downloadButton);
-  dom.previewAudio = document.querySelector(selectors.previewAudio);
-  dom.encodeVolume = document.querySelector(selectors.encodeVolume);
-  dom.encodeVolumeValue = document.querySelector(selectors.encodeVolumeValue);
-  dom.upgradeButtons = Array.from(document.querySelectorAll(selectors.upgradeButtons || []));
-  dom.planPill = document.querySelector(selectors.planPill);
-  dom.modeLabel = document.querySelector(selectors.modeLabel);
-  dom.modeAudible = document.querySelector(selectors.modeAudible);
-  dom.modeUltrasound = document.querySelector(selectors.modeUltrasound);
-  dom.historyList = document.querySelector(selectors.historyList);
-  dom.historyEmpty = document.querySelector(selectors.historyEmpty);
-  dom.historyCount = document.querySelector(selectors.historyCount);
-  dom.heroLogin = document.querySelector(selectors.heroLogin);
-  dom.dashboardScanButton = document.querySelector(selectors.dashboardScanButton);
-  dom.lastDecodeCard = document.querySelector(selectors.lastDecodeCard);
-  dom.lastDecodeText = document.querySelector(selectors.lastDecodeText);
-  dom.lastDecodeLink = document.querySelector(selectors.lastDecodeLink);
-  dom.scanButtonSpinner = document.querySelector(selectors.scanButtonSpinner);
-  dom.scanButtonIcon = document.querySelector(selectors.scanButtonIcon);
-  dom.scanButtonLabel = document.querySelector(selectors.scanButtonLabel);
-  dom.inlineScanStatus = document.querySelector(selectors.inlineScanStatus);
-  dom.checkoutSuccessCard = document.querySelector(selectors.checkoutSuccessCard);
-  dom.checkoutCancelCard = document.querySelector(selectors.checkoutCancelCard);
-  dom.checkoutSuccessSession = document.querySelector(selectors.checkoutSuccessSession);
-  dom.checkoutSuccessDismiss = document.querySelector(selectors.checkoutSuccessDismiss);
-  dom.checkoutCancelDismiss = document.querySelector(selectors.checkoutCancelDismiss);
-  dom.nextPaymentLabel = document.querySelector("#dashboard-next-payment");
+  cacheDomFromUi(dom);
 }
 
 function showToast(message) {
-  if (!dom.toast || !dom.toastMessage) return;
-  dom.toastMessage.textContent = message;
-  dom.toast.classList.add("opacity-100");
-  dom.toast.classList.remove("pointer-events-none");
-  window.setTimeout(() => {
-    dom.toast.classList.remove("opacity-100");
-    dom.toast.classList.add("pointer-events-none");
-  }, 2600);
+  showToastFromUi(dom, message);
 }
 
-const MAX_HISTORY_ITEMS = 12;
-const AUTH_MODES = {
-  LOGIN: "login",
-  REGISTER: "register",
-};
 let activeAuthMode = AUTH_MODES.LOGIN;
 
 function clearAuthError() {
-  if (!dom.authError) return;
-  dom.authError.textContent = "";
-  dom.authError.classList.add("hidden");
+  clearAuthErrorFromAuth(dom);
 }
 
 function setAuthError(message) {
-  if (!dom.authError) return;
-  if (message) {
-    dom.authError.textContent = message;
-    dom.authError.classList.remove("hidden");
-  } else {
-    clearAuthError();
-  }
+  setAuthErrorFromAuth(dom, message);
 }
 
 function setAuthMode(mode) {
-  const normalized = mode === AUTH_MODES.REGISTER ? AUTH_MODES.REGISTER : AUTH_MODES.LOGIN;
-  activeAuthMode = normalized;
-  if (Array.isArray(dom.authForms)) {
-    dom.authForms.forEach((form) => {
-      const formMode = form.dataset.authForm;
-      const isActive = formMode === normalized;
-      form.classList.toggle("hidden", !isActive);
-    });
-  }
-  if (Array.isArray(dom.authModeTabs)) {
-    dom.authModeTabs.forEach((tab) => {
-      const tabMode = tab.dataset.authModeTab;
-      const isActive = tabMode === normalized;
-      tab.classList.toggle("bg-white", isActive);
-      tab.classList.toggle("shadow-sm", isActive);
-      tab.classList.toggle("text-slate-800", isActive);
-      tab.classList.toggle("text-slate-500", !isActive);
-    });
-  }
-  clearAuthError();
-  const overlayVisible = dom.loginOverlay && !dom.loginOverlay.classList.contains("hidden");
-  if (!overlayVisible) {
-    return;
-  }
-  if (normalized === AUTH_MODES.LOGIN) {
-    dom.loginEmail?.focus();
-  } else {
-    dom.registerEmail?.focus();
-  }
+  activeAuthMode = setAuthModeFromAuth(dom, mode);
 }
 
 function setButtonLoadingState(button, isLoading, loadingLabel) {
-  if (!button) return;
-  if (isLoading) {
-    if (!button.dataset.originalText) {
-      button.dataset.originalText = button.textContent || "";
-    }
-    button.disabled = true;
-    button.textContent = loadingLabel;
-  } else {
-    button.disabled = false;
-    if (button.dataset.originalText !== undefined) {
-      button.textContent = button.dataset.originalText;
-      delete button.dataset.originalText;
-    }
-  }
+  setButtonLoadingStateFromUi(button, isLoading, loadingLabel);
 }
 
 async function apiRequest(path, { method = "GET", body, headers } = {}) {
-  const options = {
-    method,
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-      ...headers,
-    },
-  };
-  if (body !== undefined) {
-    options.headers["Content-Type"] = "application/json";
-    options.body = JSON.stringify(body);
-  }
-  const response = await fetch(path, options);
-  const contentType = response.headers.get("content-type") || "";
-  let payload = null;
-  if (contentType.includes("application/json")) {
-    payload = await response.json();
-  } else {
-    payload = await response.text();
-  }
-  if (!response.ok) {
-    try {
-      console.error("API request failed", {
-        method,
-        requestedPath: path,
-        resolvedUrl: response.url,
-        status: response.status,
-        payload,
-      });
-    } catch (logErr) {
-      console.warn("Failed to log API error details", logErr);
-    }
-    const error = new Error(
-      (payload && payload.error) || (typeof payload === "string" ? payload : "Request failed"),
-    );
-    error.status = response.status;
-    error.body = payload;
-    throw error;
-  }
-  return payload;
+  return apiRequestFromAuth(path, { method, body, headers });
 }
 
 async function fetchActiveSession() {
-  try {
-    const session = await apiRequest("/api/session");
-    if (session && session.authenticated && session.user) {
-      return session.user;
-    }
-  } catch (err) {
-    console.warn("Failed to fetch session", err);
-  }
-  return null;
+  return fetchActiveSessionFromAuth(apiRequest);
 }
 
 async function performLogin(email, password) {
-  const result = await apiRequest("/api/login", {
-    method: "POST",
-    body: { email, password },
-  });
-  if (result && result.user) {
-    return result.user;
-  }
-  return null;
+  return performLoginFromAuth(email, password, apiRequest);
 }
 
 async function performRegister(email, password) {
-  const result = await apiRequest("/api/register", {
-    method: "POST",
-    body: { email, password },
-  });
-  if (result && result.user) {
-    return result.user;
-  }
-  return null;
+  return performRegisterFromAuth(email, password, apiRequest);
 }
 
 async function performLogout() {
-  try {
-    await apiRequest("/api/logout", { method: "POST" });
-  } catch (err) {
-    console.warn("Failed to log out", err);
-  }
+  await performLogoutFromAuth(apiRequest);
 }
 
 async function startPlanCheckout(plan, button) {
-  const targetPlan = plan || "pro";
-  if (scannerState.billing?.plan === "pro") {
-    showToast("You're already on the Pro plan.");
-    return;
-  }
-  setButtonLoadingState(button, true, "Redirecting…");
-  try {
-    const response = await apiRequest(`/api/checkout/${targetPlan}`, {
-      method: "POST",
-      body: {
-        plan: targetPlan,
-        email: scannerState.user?.email || null,
-      },
-    });
-    if (response && response.url) {
-      window.location.href = response.url;
-      return;
-    }
-    throw new Error("Checkout link unavailable.");
-  } catch (err) {
-    console.error("Checkout failed", err);
-    showToast(err.body?.error || err.message || "Unable to start checkout.");
-  } finally {
-    setButtonLoadingState(button, false);
-  }
+  await startPlanCheckoutFromBilling({
+    scannerState,
+    apiRequest,
+    showToast,
+    setButtonLoadingState,
+    plan,
+    button,
+  });
 }
 
 function handleCheckoutNotices() {
-  if (!dom.checkoutSuccessCard && !dom.checkoutCancelCard) return;
-  const params = new URLSearchParams(window.location.search);
-  const status = params.get("checkout");
-  const sessionId = params.get("session_id");
-
-  const hideCards = () => {
-    dom.checkoutSuccessCard?.classList.add("hidden");
-    dom.checkoutCancelCard?.classList.add("hidden");
-    dom.checkoutSuccessSession?.classList.add("hidden");
-  };
-
-  if (status === "success" && dom.checkoutSuccessCard) {
-    dom.checkoutSuccessCard.classList.remove("hidden");
-    if (dom.checkoutSuccessSession) {
-      if (sessionId) {
-        dom.checkoutSuccessSession.textContent = sessionId;
-        dom.checkoutSuccessSession.classList.remove("hidden");
-      } else {
-        dom.checkoutSuccessSession.classList.add("hidden");
-      }
-    }
-    dom.checkoutSuccessDismiss?.addEventListener("click", hideCards, { once: true });
-    if (sessionId) {
-      void confirmCheckoutSession(sessionId);
-    } else {
-      void refreshBillingStatus();
-    }
-  } else if (status === "cancelled" && dom.checkoutCancelCard) {
-    dom.checkoutCancelCard.classList.remove("hidden");
-    dom.checkoutCancelDismiss?.addEventListener("click", hideCards, { once: true });
-    void refreshBillingStatus();
-  }
-
-  if (status) {
-    params.delete("checkout");
-    if (sessionId) params.delete("session_id");
-    const cleaned = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ""}${
-      window.location.hash
-    }`;
-    window.history.replaceState({}, document.title, cleaned);
-  }
-}
-
-function getEncodeHistoryKey() {
-  if (!scannerState.user || !scannerState.user.email) return null;
-  return `new-encode-history-${scannerState.user.email}`;
+  handleCheckoutNoticesFromBilling({
+    dom,
+    confirmCheckoutSession,
+    refreshBillingStatus,
+  });
 }
 
 function loadEncodeHistory() {
-  const key = getEncodeHistoryKey();
-  if (!key) {
-    scannerState.encodeHistory = [];
-    return;
-  }
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) {
-      scannerState.encodeHistory = [];
-      return;
-    }
-    const parsed = JSON.parse(raw);
-    scannerState.encodeHistory = Array.isArray(parsed)
-      ? parsed
-          .filter((item) => item && item.url)
-          .map((item) => ({
-            id: item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            text: item.text || "",
-            url: item.url,
-            timestamp: item.timestamp || Date.now(),
-            mode: item.mode === "ultrasound" ? "ultrasound" : "audible",
-            scanCount: typeof item.scanCount === "number" && Number.isFinite(item.scanCount) ? item.scanCount : 0,
-            lastScan: typeof item.lastScan === "number" && Number.isFinite(item.lastScan) ? item.lastScan : null,
-            scanEvents: Array.isArray(item.scanEvents)
-              ? item.scanEvents
-                  .map((value) => {
-                    const ts = Number(value);
-                    return Number.isFinite(ts) ? ts : null;
-                  })
-                  .filter((value) => value !== null)
-              : [],
-          }))
-      : [];
-  } catch (err) {
-    console.warn("Failed to parse encode history", err);
-    scannerState.encodeHistory = [];
-  }
-  if (scannerState.encodeHistory.length > MAX_HISTORY_ITEMS) {
-    scannerState.encodeHistory.length = MAX_HISTORY_ITEMS;
-  }
+  loadEncodeHistoryFromHistory(scannerState);
 }
 
 function saveEncodeHistory() {
-  const key = getEncodeHistoryKey();
-  if (!key) return;
-  try {
-    localStorage.setItem(key, JSON.stringify(scannerState.encodeHistory));
-  } catch (err) {
-    console.warn("Failed to persist encode history", err);
-  }
-}
-
-function formatRelativeTime(value) {
-  if (!value) return "Just now";
-  const timestamp = typeof value === "number" ? value : Date.parse(value);
-  if (Number.isNaN(timestamp)) {
-    return "Just now";
-  }
-  const diff = Date.now() - timestamp;
-  const seconds = Math.max(0, Math.round(diff / 1000));
-  const intervals = [
-    { label: "d", seconds: 86400 },
-    { label: "h", seconds: 3600 },
-    { label: "m", seconds: 60 },
-  ];
-  for (const interval of intervals) {
-    if (seconds >= interval.seconds) {
-      const count = Math.floor(seconds / interval.seconds);
-      return `${count}${interval.label} ago`;
-    }
-  }
-  return "Just now";
+  saveEncodeHistoryFromHistory(scannerState);
 }
 
 function renderEncodeHistory() {
-  if (!dom.historyList || !dom.historyEmpty || !dom.historyCount) return;
-  const items = scannerState.encodeHistory;
-  dom.historyList.innerHTML = "";
-
-  if (!items.length) {
-    dom.historyEmpty.classList.remove("hidden");
-    dom.historyCount.textContent = "0 items";
-    return;
-  }
-
-  const totalScans = items.reduce((acc, item) => acc + (Number(item.scanCount) || 0), 0);
-  dom.historyEmpty.classList.add("hidden");
-  dom.historyCount.textContent = `${items.length} item${items.length === 1 ? "" : "s"} • ${totalScans} scan${totalScans === 1 ? "" : "s"}`;
-
-  const createIconButton = (label, svgMarkup, handler) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className =
-      "history-icon-button inline-flex flex-1 items-center justify-center rounded-2xl border border-slate-100 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-200 hover:text-slate-900";
-    button.innerHTML = `${svgMarkup}<span class="sr-only">${label}</span>`;
-    button.addEventListener("click", handler);
-    return button;
-  };
-
-  items.forEach((entry) => {
-    const isLoopingThisEntry =
-      scannerState.historyLoopEntryId &&
-      scannerState.historyLoopEntryId === entry.id &&
-      scannerState.historyLoopAudio &&
-      !scannerState.historyLoopAudio.paused;
-
-    const li = document.createElement("li");
-    li.className =
-      "w-full overflow-hidden rounded-3xl border border-slate-100 bg-white/95 p-5 shadow-[0_15px_50px_-30px_rgba(15,23,42,0.35)]";
-
-    const header = document.createElement("div");
-    header.className = "flex min-w-0 items-start gap-3";
-    const titleWrap = document.createElement("div");
-    titleWrap.className = "min-w-0 flex-1";
-    const displayText = entry.url || entry.text || "Untitled link";
-    titleWrap.innerHTML = `<p class="break-all text-base font-semibold text-slate-900">${displayText}</p><p class="text-xs text-slate-400">${formatRelativeTime(entry.timestamp)}</p>`;
-    header.appendChild(titleWrap);
-    const modeBadge = document.createElement("span");
-    modeBadge.className =
-      "ml-auto shrink-0 rounded-full bg-[#f4f5ff] px-3 py-1 text-xs font-semibold text-slate-500";
-    modeBadge.textContent = entry.mode === "ultrasound" ? "Ultrasound" : "Audible";
-    header.appendChild(modeBadge);
-    li.appendChild(header);
-
-    const stats = document.createElement("div");
-    const scanCount = typeof entry.scanCount === "number" ? entry.scanCount : 0;
-    const lastScanLabel = entry.lastScan ? formatRelativeTime(entry.lastScan) : "No scans yet";
-    stats.className = "mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500";
-    stats.innerHTML = `<span class="inline-flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-[#8b5cf6]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 12h16M4 6h16M4 18h16" /></svg>${scanCount} scan${scanCount === 1 ? "" : "s"}</span><span>Last scan: ${lastScanLabel}</span>`;
-    li.appendChild(stats);
-
-    const controls = document.createElement("div");
-    controls.className = "mt-4 grid grid-cols-3 gap-2";
-    controls.appendChild(
-      createIconButton(
-        "Play link",
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>',
-        () => {
-          void handleHistoryAction(entry, "play");
-        },
-      ),
-    );
-    controls.appendChild(
-      createIconButton(
-        "Loop playback",
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 12a8 8 0 0113.856-4.856M20 12a8 8 0 01-13.856 4.856M12 6v6l3 3"/></svg>',
-        () => {
-          void handleHistoryAction(entry, "loop");
-        },
-      ),
-    );
-    controls.appendChild(
-      createIconButton(
-        "Download audio",
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 20h12M12 4v10m0 0l4-4m-4 4l-4-4"/></svg>',
-        () => {
-          void handleHistoryAction(entry, "download");
-        },
-      ),
-    );
-    li.appendChild(controls);
-
-    const secondaryControls = document.createElement("div");
-    secondaryControls.className = "mt-4 grid gap-2 text-xs text-slate-500 sm:grid-cols-2";
-    const openBtn = document.createElement("button");
-    openBtn.type = "button";
-    openBtn.className =
-      "flex-1 rounded-2xl border border-slate-100 bg-white px-4 py-2 text-left font-semibold text-slate-600";
-    openBtn.textContent = "Open link";
-    openBtn.addEventListener("click", () => {
-      const normalized = entry.url ? normalizeUrl(entry.url) : null;
-      if (normalized) {
-        window.open(normalized, "_blank", "noopener");
-      }
-    });
-    const copyBtn = document.createElement("button");
-    copyBtn.type = "button";
-    copyBtn.className =
-      "flex-1 rounded-2xl border border-slate-100 bg-white px-4 py-2 text-left font-semibold text-slate-600";
-    copyBtn.textContent = "Copy text";
-    copyBtn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(entry.text || entry.url || "");
-        showToast("Copied to clipboard.");
-      } catch (err) {
-        console.warn("Clipboard copy failed", err);
-        showToast("Copy failed. Try again.");
-      }
-    });
-    secondaryControls.appendChild(openBtn);
-    secondaryControls.appendChild(copyBtn);
-    li.appendChild(secondaryControls);
-
-    const loopToggle = document.createElement("button");
-    loopToggle.type = "button";
-    loopToggle.setAttribute("aria-pressed", isLoopingThisEntry ? "true" : "false");
-    loopToggle.className =
-      "mt-4 inline-flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-[#f8f9ff] px-4 py-2 text-left text-xs font-semibold text-slate-600";
-    loopToggle.innerHTML = `
-      <span class="inline-flex h-4 w-7 items-center rounded-full ${isLoopingThisEntry ? "bg-emerald-400" : "bg-slate-300"}">
-        <span class="block h-4 w-4 rounded-full bg-white shadow transition-transform" style="transform: translateX(${isLoopingThisEntry ? "12px" : "0px"});"></span>
-      </span>
-      <span>Loop in background</span>
-    `;
-    loopToggle.addEventListener("click", () => {
-      void handleHistoryAction(entry, "loop");
-    });
-    li.appendChild(loopToggle);
-
-    dom.historyList.appendChild(li);
+  renderEncodeHistoryFromHistory({
+    scannerState,
+    dom,
+    onHistoryAction: handleHistoryAction,
+    showToast,
+    normalizeUrl,
   });
 }
 
@@ -713,149 +220,30 @@ function updateModeUI() {
 }
 
 function resetBillingState() {
-  scannerState.billing = {
-    plan: "free",
-    planUpdatedAt: null,
-    subscriptionStatus: null,
-    subscriptionPeriodEnd: null,
-    lastConfirmedSession: null,
-  };
-  updatePlanUI();
-}
-
-function updateBillingState(partial) {
-  scannerState.billing = {
-    ...scannerState.billing,
-    ...partial,
-  };
-  if (scannerState.user) {
-    scannerState.user.plan = scannerState.billing.plan;
-    scannerState.user.planUpdatedAt = scannerState.billing.planUpdatedAt;
-    scannerState.user.stripeSubscriptionStatus = scannerState.billing.subscriptionStatus;
-    scannerState.user.stripeSubscriptionPeriodEnd = scannerState.billing.subscriptionPeriodEnd;
-  }
-  updatePlanUI();
+  resetBillingStateFromBilling(scannerState, dom);
 }
 
 function hydratePlanFromUser(user) {
-  if (!user) {
-    resetBillingState();
-    return;
-  }
-  updateBillingState({
-    plan: user.plan || "free",
-    planUpdatedAt: user.planUpdatedAt || null,
-    subscriptionStatus: user.stripeSubscriptionStatus || null,
-    subscriptionPeriodEnd: user.stripeSubscriptionPeriodEnd || null,
-  });
-}
-
-function getPlanDisplay(plan) {
-  const normalized = plan === "pro" ? "pro" : "free";
-  return normalized === "pro" ? "Pro Plan" : "Free Plan";
+  hydratePlanFromUserFromBilling(scannerState, dom, user);
 }
 
 function updatePlanUI() {
-  const plan = scannerState.billing?.plan || "free";
-  const display = getPlanDisplay(plan);
-  const isPro = plan === "pro";
-  if (dom.planPill) {
-    dom.planPill.textContent = display;
-    dom.planPill.classList.toggle("bg-white/80", !isPro);
-    dom.planPill.classList.toggle("text-slate-600", !isPro);
-    dom.planPill.classList.toggle("border-slate-100", !isPro);
-    dom.planPill.classList.toggle("bg-violet-50", isPro);
-    dom.planPill.classList.toggle("text-violet-700", isPro);
-    dom.planPill.classList.toggle("border-violet-200", isPro);
-  }
-  dom.upgradeButtons?.forEach((button) => {
-    if (!button.dataset.originalText) {
-      button.dataset.originalText = button.textContent || "";
-    }
-    if (!button.dataset.proText) {
-      button.dataset.proText = "Pro plan active";
-    }
-    button.disabled = isPro;
-    if (isPro) {
-      button.textContent = button.dataset.proText;
-      button.classList.add("opacity-60", "cursor-not-allowed");
-    } else {
-      button.textContent = button.dataset.originalText;
-      button.classList.remove("opacity-60", "cursor-not-allowed");
-    }
-  });
-  if (dom.nextPaymentLabel) {
-    if (isPro) {
-      const nextPayment = scannerState.billing?.subscriptionPeriodEnd
-        ? formatNextPayment(scannerState.billing.subscriptionPeriodEnd)
-        : "Included in current period";
-      dom.nextPaymentLabel.textContent = nextPayment;
-    } else {
-      dom.nextPaymentLabel.textContent = "Upgrade to unlock";
-    }
-  }
+  updatePlanUIFromBilling(scannerState, dom);
 }
 
-function formatNextPayment(isoString) {
-  if (!isoString) return "Included in current period";
-  const date = new Date(isoString);
-  if (Number.isNaN(date.getTime())) {
-    return "Included in current period";
-  }
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 async function refreshBillingStatus() {
-  if (!scannerState.user) return;
-  try {
-    const status = await apiRequest("/api/billing/status");
-    if (status) {
-      updateBillingState({
-        plan: status.plan || "free",
-        planUpdatedAt: status.planUpdatedAt || null,
-        subscriptionStatus: status.stripeSubscriptionStatus || null,
-        subscriptionPeriodEnd: status.stripeSubscriptionPeriodEnd || null,
-      });
-    }
-  } catch (err) {
-    if (err && err.status === 401) {
-      resetBillingState();
-    } else {
-      console.warn("Failed to refresh billing status", err);
-    }
-  }
+  await refreshBillingStatusFromBilling(scannerState, dom, apiRequest);
 }
 
 async function confirmCheckoutSession(sessionId) {
-  if (!sessionId) return;
-  if (scannerState.billing.lastConfirmedSession === sessionId) {
-    return;
-  }
-  try {
-    const result = await apiRequest("/api/billing/confirm", {
-      method: "POST",
-      body: { sessionId },
-    });
-    if (result) {
-      scannerState.billing.lastConfirmedSession = sessionId;
-      updateBillingState({
-        plan: result.plan || "pro",
-        planUpdatedAt: result.planUpdatedAt || new Date().toISOString(),
-        subscriptionStatus: result.stripeSubscriptionStatus || null,
-        subscriptionPeriodEnd: result.stripeSubscriptionPeriodEnd || null,
-      });
-      showToast("Pro subscription activated.");
-    }
-  } catch (err) {
-    console.error("Failed to confirm checkout session", err);
-    showToast(err.body?.error || err.message || "Unable to confirm subscription.");
-    await refreshBillingStatus();
-  }
+  await confirmCheckoutSessionFromBilling({
+    scannerState,
+    dom,
+    apiRequest,
+    showToast,
+    sessionId,
+  });
 }
 
 function setTransmissionMode(mode) {
@@ -866,15 +254,7 @@ function setTransmissionMode(mode) {
 }
 
 function updateDashboardStats() {
-  if (dom.dashboardTotalLinks) {
-    dom.dashboardTotalLinks.textContent = String(scannerState.encodeHistory.length);
-  }
-  if (dom.dashboardLastGenerated) {
-    const last = scannerState.encodeHistory[0];
-    dom.dashboardLastGenerated.textContent = last
-      ? new Date(last.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
-      : "—";
-  }
+  updateDashboardStatsFromHistory(scannerState, dom);
 }
 
 function updateLastResultDisplays(value) {
@@ -932,28 +312,15 @@ function updateLandingDecodeCard(value) {
 }
 
 function incrementEncodeHistoryScanCount(rawValue) {
-  if (!scannerState.user) return;
-  const trimmed = (rawValue || "").trim();
-  if (!trimmed) return;
-  const detectedUrl = detectFirstUrl(trimmed);
-  const key = detectedUrl ? normalizeUrl(detectedUrl) : trimmed;
-  if (!key) return;
-  const entry = scannerState.encodeHistory.find((item) => item.url === key);
-  if (!entry) return;
-  entry.scanCount = (entry.scanCount || 0) + 1;
-  const now = Date.now();
-  entry.lastScan = now;
-  if (!Array.isArray(entry.scanEvents)) {
-    entry.scanEvents = [];
-  }
-  entry.scanEvents.push(now);
-  const MAX_EVENTS = 12;
-  if (entry.scanEvents.length > MAX_EVENTS) {
-    entry.scanEvents.splice(0, entry.scanEvents.length - MAX_EVENTS);
-  }
-  saveEncodeHistory();
-  renderEncodeHistory();
-  updateDashboardStats();
+  incrementEncodeHistoryScanCountFromHistory({
+    scannerState,
+    rawValue,
+    detectFirstUrl,
+    normalizeUrl,
+    saveEncodeHistoryFn: saveEncodeHistory,
+    renderEncodeHistoryFn: renderEncodeHistory,
+    updateDashboardStatsFn: updateDashboardStats,
+  });
 }
 
 function handleDecodingSuccess(displayText) {
@@ -1324,40 +691,7 @@ function getProtocolIdForCurrentMode() {
 }
 
 function createWavBlob(int16Data, sampleRate) {
-  const bytesPerSample = 2;
-  const blockAlign = bytesPerSample;
-  const byteRate = sampleRate * blockAlign;
-  const dataLength = int16Data.length * bytesPerSample;
-  const buffer = new ArrayBuffer(44 + dataLength);
-  const view = new DataView(buffer);
-
-  function writeString(offset, str) {
-    for (let i = 0; i < str.length; i += 1) {
-      view.setUint8(offset + i, str.charCodeAt(i));
-    }
-  }
-
-  writeString(0, "RIFF");
-  view.setUint32(4, 36 + dataLength, true);
-  writeString(8, "WAVE");
-  writeString(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, 16, true);
-  writeString(36, "data");
-  view.setUint32(40, dataLength, true);
-
-  let offset = 44;
-  for (let i = 0; i < int16Data.length; i += 1) {
-    view.setInt16(offset, int16Data[i], true);
-    offset += 2;
-  }
-
-  return new Blob([view], { type: "audio/wav" });
+  return createWavBlobFromAudio(int16Data, sampleRate);
 }
 
 function clampEncodeGain(value) {
@@ -1400,9 +734,6 @@ function saveEncodeGain() {
     const userSpecificKey = getEncodeGainStorageKey();
     if (userSpecificKey) {
       localStorage.setItem(userSpecificKey, serialised);
-      lastEncodeGainStorageKey = userSpecificKey;
-    } else {
-      lastEncodeGainStorageKey = ENCODE_GAIN_STORAGE_KEY;
     }
   } catch (err) {
     console.warn("Failed to save encode gain preference", err);
@@ -1413,7 +744,6 @@ function restoreEncodeGain() {
   let targetGain = ENCODE_GAIN_DEFAULT;
   try {
     const userSpecificKey = getEncodeGainStorageKey();
-    lastEncodeGainStorageKey = userSpecificKey || ENCODE_GAIN_STORAGE_KEY;
     if (userSpecificKey) {
       const rawUser = localStorage.getItem(userSpecificKey);
       if (rawUser !== null) {
@@ -1456,18 +786,7 @@ function updateEncodeGainUI() {
 }
 
 function applyGainToSamples(baseSamples, gain) {
-  if (!baseSamples) {
-    return null;
-  }
-  const multiplier = clampEncodeGain(gain);
-  const output = new Int16Array(baseSamples.length);
-  for (let i = 0; i < baseSamples.length; i += 1) {
-    let sample = baseSamples[i] * multiplier;
-    if (sample > 32767) sample = 32767;
-    else if (sample < -32768) sample = -32768;
-    output[i] = Math.round(sample);
-  }
-  return output;
+  return applyGainToSamplesFromAudio(baseSamples, gain, clampEncodeGain);
 }
 
 function renderEncodedAudio({ sourceText, skipHistory = false, resetPlayback = false } = {}) {
@@ -1567,31 +886,16 @@ function stopLoopPlayback({ updateButton = true } = {}) {
 }
 
 function stopHistoryLoopPlayback({ rerender = true } = {}) {
-  if (scannerState.historyLoopAudio) {
-    scannerState.historyLoopAudio.pause();
-    scannerState.historyLoopAudio.currentTime = 0;
-    scannerState.historyLoopAudio.src = "";
-    scannerState.historyLoopAudio = null;
-  }
-  if (scannerState.historyLoopObjectUrl) {
-    URL.revokeObjectURL(scannerState.historyLoopObjectUrl);
-    scannerState.historyLoopObjectUrl = null;
-  }
-  scannerState.historyLoopEntryId = null;
-  if (rerender) {
-    renderEncodeHistory();
-  }
+  stopHistoryLoopPlaybackFromAudio(scannerState, rerender, renderEncodeHistory);
 }
 
 function encodePayloadToWavBlob(payload, protocolId) {
-  const waveform = scannerState.ggwave.encode(scannerState.ggwaveInstance, payload, protocolId, 10);
-  if (!waveform || !waveform.length) {
-    throw new Error("Empty waveform from ggwave");
-  }
-  const waveformCopy = new Int8Array(waveform);
-  const int16Samples = new Int16Array(waveformCopy.buffer.slice(0));
-  const scaledSamples = applyGainToSamples(int16Samples, scannerState.encodeGain) || int16Samples;
-  return createWavBlob(scaledSamples, scannerState.sampleRate);
+  return encodePayloadToWavBlobFromAudio({
+    scannerState,
+    payload,
+    protocolId,
+    clampEncodeGain,
+  });
 }
 
 function toggleLoopPlayback() {
@@ -1655,32 +959,16 @@ function resetEncodeUI() {
 }
 
 function addEncodeHistoryEntry(text) {
-  const trimmedText = text.trim();
-  const detectedUrl = detectFirstUrl(text);
-  const normalized = detectedUrl ? normalizeUrl(detectedUrl) : null;
-  const targetUrl = normalized || trimmedText;
-  const existing = scannerState.encodeHistory.find((item) => item.url === targetUrl);
-
-  const entry = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    text: trimmedText,
-    url: targetUrl,
-    timestamp: Date.now(),
-    mode: scannerState.transmissionMode,
-    scanCount: existing?.scanCount || 0,
-    lastScan: existing?.lastScan || null,
-    scanEvents: Array.isArray(existing?.scanEvents) ? existing.scanEvents.slice(-MAX_HISTORY_ITEMS) : [],
-  };
-
-  scannerState.encodeHistory = scannerState.encodeHistory.filter((item) => item.url !== entry.url);
-  scannerState.encodeHistory.unshift(entry);
-  if (scannerState.encodeHistory.length > MAX_HISTORY_ITEMS) {
-    scannerState.encodeHistory.length = MAX_HISTORY_ITEMS;
-  }
-  saveEncodeHistory();
-  renderEncodeHistory();
-  updateDashboardStats();
-  updateLastResultDisplays(text);
+  addEncodeHistoryEntryFromHistory({
+    text,
+    scannerState,
+    detectFirstUrl,
+    normalizeUrl,
+    saveEncodeHistoryFn: saveEncodeHistory,
+    renderEncodeHistoryFn: renderEncodeHistory,
+    updateDashboardStatsFn: updateDashboardStats,
+    updateLastResultDisplays,
+  });
 }
 
 async function handleGenerateSound() {

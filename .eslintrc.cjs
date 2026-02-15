@@ -29,6 +29,10 @@ module.exports = {
         browser: true,
         es2022: true,
       },
+      parserOptions: {
+        sourceType: "module",
+        ecmaVersion: "latest",
+      },
       extends: ["eslint:recommended"],
       globals: {
         ggwave_factory: "readonly",
