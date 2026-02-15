@@ -148,14 +148,11 @@ export function renderEncodeHistory({
     const isPlayingThisEntry =
       scannerState.historyPlayEntryId &&
       scannerState.historyPlayEntryId === entry.id &&
-      scannerState.historyPlayAudio &&
-      !scannerState.historyPlayAudio.paused &&
-      !scannerState.historyPlayAudio.ended;
+      scannerState.historyPlayAudio;
     const isLoopingThisEntry =
       scannerState.historyLoopEntryId &&
       scannerState.historyLoopEntryId === entry.id &&
-      scannerState.historyLoopAudio &&
-      !scannerState.historyLoopAudio.paused;
+      scannerState.historyLoopAudio;
     const isCurrentEntry = scannerState.currentHistoryEntryId && scannerState.currentHistoryEntryId === entry.id;
 
     const li = document.createElement("li");
@@ -206,6 +203,7 @@ export function renderEncodeHistory({
         () => {
           void onHistoryAction(entry, "play");
         },
+        isPlayingThisEntry ? "border-[#d9d2ff] bg-[#eef2ff] text-[#5b4ff5]" : "",
       ),
     );
     controls.appendChild(

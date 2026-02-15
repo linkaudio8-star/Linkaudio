@@ -1054,10 +1054,15 @@ function updateLoopButtonState() {
 
 function updatePlayButtonState() {
   if (!dom.playButton) return;
+  const hasAudio = !!scannerState.encodedBlob;
   const isPlaying = !!(dom.previewAudio && !dom.previewAudio.paused && !dom.previewAudio.ended);
+  dom.playButton.disabled = !hasAudio;
   dom.playButton.setAttribute("aria-pressed", isPlaying ? "true" : "false");
   dom.playButton.classList.toggle("bg-[#eef2ff]", isPlaying);
   dom.playButton.classList.toggle("text-[#5b4ff5]", isPlaying);
+  dom.playButton.innerHTML = isPlaying
+    ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M7 6h4v12H7zm6 0h4v12h-4z"/></svg>Pause'
+    : '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Play';
 }
 
 function stopLoopPlayback({ updateButton = true } = {}) {
@@ -1314,14 +1319,11 @@ async function handleHistoryAction(entry, intent) {
   const isLoopingThisEntry =
     scannerState.historyLoopEntryId &&
     scannerState.historyLoopEntryId === entry.id &&
-    scannerState.historyLoopAudio &&
-    !scannerState.historyLoopAudio.paused;
+    scannerState.historyLoopAudio;
   const isPlayingThisEntry =
     scannerState.historyPlayEntryId &&
     scannerState.historyPlayEntryId === entry.id &&
-    scannerState.historyPlayAudio &&
-    !scannerState.historyPlayAudio.paused &&
-    !scannerState.historyPlayAudio.ended;
+    scannerState.historyPlayAudio;
   if (intent === "loop" && isLoopingThisEntry) {
     stopHistoryLoopPlayback();
     showToast("Looping stopped.");
