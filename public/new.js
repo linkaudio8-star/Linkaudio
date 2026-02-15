@@ -1375,9 +1375,16 @@ async function handleHistoryAction(entry, intent) {
   try {
     historyBlob = encodePayloadToWavBlob(payload, protocolId);
   } catch (err) {
-    console.error("Failed to regenerate sound from history", err);
-    showToast("Unable to prepare this sound. Try regenerating it manually.");
-    return;
+    console.warn("Primary history encoding failed, trying fallback", err);
+    try {
+      const fallbackSamples = encodeTextToInt16Samples(String(payload || ""));
+      const scaledFallback = applyGainToSamples(fallbackSamples, scannerState.encodeGain) || fallbackSamples;
+      historyBlob = createWavBlob(scaledFallback, scannerState.sampleRate);
+    } catch (fallbackErr) {
+      console.error("Failed to regenerate sound from history", fallbackErr);
+      showToast("Unable to prepare this sound. Try regenerating it manually.");
+      return;
+    }
   }
 
   const objectUrl = URL.createObjectURL(historyBlob);
