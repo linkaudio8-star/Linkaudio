@@ -154,7 +154,7 @@ export function renderEncodeHistory({
 
     const li = document.createElement("li");
     li.className =
-      "w-full overflow-hidden rounded-3xl border border-slate-100 bg-white/95 p-5 shadow-[0_15px_50px_-30px_rgba(15,23,42,0.35)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_60px_-30px_rgba(15,23,42,0.45)]";
+      "relative w-full overflow-hidden rounded-3xl border border-slate-100 bg-white/95 p-5 shadow-[0_15px_50px_-30px_rgba(15,23,42,0.35)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_60px_-30px_rgba(15,23,42,0.45)]";
     if (isCurrentEntry) {
       li.classList.add("border-[#cfc7ff]", "bg-[#fafbff]");
     }
@@ -162,9 +162,19 @@ export function renderEncodeHistory({
       if (event.target instanceof Element && event.target.closest("button")) return;
       void onHistoryAction(entry, "select");
     });
+    li.appendChild(
+      createIconButton(
+        "Delete sound",
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m-9 0l1 13h8l1-13M10 11v5m4-5v5"/></svg>',
+        () => {
+          void onHistoryAction(entry, "delete");
+        },
+        "absolute right-4 top-4 h-9 w-9 flex-none rounded-lg border-slate-200 bg-white px-0 py-0 text-slate-400 hover:border-rose-200 hover:text-rose-500",
+      ),
+    );
 
     const header = document.createElement("div");
-    header.className = "flex min-w-0 items-start gap-3";
+    header.className = "flex min-w-0 items-start gap-3 pr-12";
     const titleWrap = document.createElement("div");
     titleWrap.className = "min-w-0 flex-1";
     const displayText = entry.url || entry.text || "Untitled link";
@@ -179,16 +189,6 @@ export function renderEncodeHistory({
       currentBadge.textContent = "Current";
       headerActions.appendChild(currentBadge);
     }
-    headerActions.appendChild(
-      createIconButton(
-        "Delete sound",
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m-9 0l1 13h8l1-13M10 11v5m4-5v5"/></svg>',
-        () => {
-          void onHistoryAction(entry, "delete");
-        },
-        "h-8 w-8 flex-none rounded-lg border-slate-200 px-0 py-0 text-slate-400 hover:border-rose-200 hover:text-rose-500",
-      ),
-    );
     header.appendChild(headerActions);
     li.appendChild(header);
 
