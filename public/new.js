@@ -23,6 +23,7 @@ const scannerState = {
   encodedBaseSamples: null,
   encodeGain: 1,
   loopingPlayback: false,
+  loopingHistoryEntryId: null,
   encodeHistory: [],
   billing: {
     plan: "free",
@@ -189,6 +190,12 @@ function cacheDom() {
   dom.playLoopButton = document.querySelector(selectors.playLoopButton);
   dom.playLoopLabel = dom.playLoopButton
     ? dom.playLoopButton.querySelector("[data-loop-label]")
+    : null;
+  dom.playLoopTrack = dom.playLoopButton
+    ? dom.playLoopButton.querySelector("[data-loop-track]")
+    : null;
+  dom.playLoopKnob = dom.playLoopButton
+    ? dom.playLoopButton.querySelector("[data-loop-knob]")
     : null;
   dom.downloadButton = document.querySelector(selectors.downloadButton);
   dom.previewAudio = document.querySelector(selectors.previewAudio);
@@ -565,18 +572,25 @@ function renderEncodeHistory() {
   };
 
   items.forEach((entry) => {
+    const isLoopingThisEntry =
+      scannerState.loopingPlayback &&
+      scannerState.loopingHistoryEntryId &&
+      scannerState.loopingHistoryEntryId === entry.id;
+
     const li = document.createElement("li");
     li.className =
-      "rounded-3xl border border-slate-100 bg-white/95 p-5 shadow-[0_15px_50px_-30px_rgba(15,23,42,0.35)]";
+      "w-full overflow-hidden rounded-3xl border border-slate-100 bg-white/95 p-5 shadow-[0_15px_50px_-30px_rgba(15,23,42,0.35)]";
 
     const header = document.createElement("div");
-    header.className = "flex items-start justify-between gap-3";
+    header.className = "flex min-w-0 items-start gap-3";
     const titleWrap = document.createElement("div");
+    titleWrap.className = "min-w-0 flex-1";
     const displayText = entry.url || entry.text || "Untitled link";
-    titleWrap.innerHTML = `<p class="break-words text-base font-semibold text-slate-900">${displayText}</p><p class="text-xs text-slate-400">${formatRelativeTime(entry.timestamp)}</p>`;
+    titleWrap.innerHTML = `<p class="break-all text-base font-semibold text-slate-900">${displayText}</p><p class="text-xs text-slate-400">${formatRelativeTime(entry.timestamp)}</p>`;
     header.appendChild(titleWrap);
     const modeBadge = document.createElement("span");
-    modeBadge.className = "rounded-full bg-[#f4f5ff] px-3 py-1 text-xs font-semibold text-slate-500";
+    modeBadge.className =
+      "ml-auto shrink-0 rounded-full bg-[#f4f5ff] px-3 py-1 text-xs font-semibold text-slate-500";
     modeBadge.textContent = entry.mode === "ultrasound" ? "Ultrasound" : "Audible";
     header.appendChild(modeBadge);
     li.appendChild(header);
@@ -652,10 +666,15 @@ function renderEncodeHistory() {
 
     const loopToggle = document.createElement("button");
     loopToggle.type = "button";
+    loopToggle.setAttribute("aria-pressed", isLoopingThisEntry ? "true" : "false");
     loopToggle.className =
       "mt-4 inline-flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-[#f8f9ff] px-4 py-2 text-left text-xs font-semibold text-slate-600";
-    loopToggle.innerHTML =
-      '<span class="inline-flex h-4 w-7 items-center rounded-full bg-slate-300"><span class="block h-4 w-4 rounded-full bg-white shadow"></span></span><span>Loop in background</span>';
+    loopToggle.innerHTML = `
+      <span class="inline-flex h-4 w-7 items-center rounded-full ${isLoopingThisEntry ? "bg-emerald-400" : "bg-slate-300"}">
+        <span class="block h-4 w-4 rounded-full bg-white shadow transition-transform" style="transform: translateX(${isLoopingThisEntry ? "12px" : "0px"});"></span>
+      </span>
+      <span>Loop in background</span>
+    `;
     loopToggle.addEventListener("click", () => {
       void handleHistoryAction(entry, "loop");
     });
@@ -1520,6 +1539,13 @@ function updateLoopButtonState() {
   const hasAudio = !!scannerState.encodedBlob;
   dom.playLoopButton.disabled = !hasAudio;
   dom.playLoopButton.setAttribute("aria-pressed", scannerState.loopingPlayback ? "true" : "false");
+  if (dom.playLoopTrack) {
+    dom.playLoopTrack.classList.toggle("bg-emerald-400", scannerState.loopingPlayback);
+    dom.playLoopTrack.classList.toggle("bg-slate-200", !scannerState.loopingPlayback);
+  }
+  if (dom.playLoopKnob) {
+    dom.playLoopKnob.style.transform = scannerState.loopingPlayback ? "translateX(16px)" : "translateX(0px)";
+  }
   if (dom.playLoopLabel) {
     dom.playLoopLabel.textContent = scannerState.loopingPlayback ? "Stop looping" : "Loop in background";
   }
@@ -1532,6 +1558,7 @@ function stopLoopPlayback({ updateButton = true } = {}) {
     dom.previewAudio.currentTime = 0;
   }
   scannerState.loopingPlayback = false;
+  scannerState.loopingHistoryEntryId = null;
   if (updateButton) {
     updateLoopButtonState();
   }
@@ -1699,6 +1726,19 @@ async function handleHistoryAction(entry, intent) {
     return;
   }
 
+  if (
+    intent === "loop" &&
+    scannerState.loopingPlayback &&
+    scannerState.loopingHistoryEntryId &&
+    scannerState.loopingHistoryEntryId === entry.id
+  ) {
+    stopLoopPlayback({ updateButton: false });
+    updateLoopButtonState();
+    renderEncodeHistory();
+    showToast("Looping stopped.");
+    return;
+  }
+
   try {
     await ensureAudioContext();
   } catch (err) {
@@ -1745,10 +1785,13 @@ async function handleHistoryAction(entry, intent) {
   }
 
   if (intent === "play") {
+    scannerState.loopingHistoryEntryId = null;
     playEncodedAudio();
   } else if (intent === "loop") {
     stopLoopPlayback({ updateButton: false });
     toggleLoopPlayback();
+    scannerState.loopingHistoryEntryId = scannerState.loopingPlayback ? entry.id : null;
+    renderEncodeHistory();
   } else if (intent === "download") {
     handleDownloadSound();
   }
