@@ -1,3 +1,7 @@
+[![CI](https://github.com/DanielXqio/AL_New/actions/workflows/ci.yml/badge.svg)](https://github.com/DanielXqio/AL_New/actions/workflows/ci.yml)
+[![Node 18+](https://img.shields.io/badge/node-18%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![License: ISC](https://img.shields.io/badge/license-ISC-blue.svg)](https://opensource.org/license/isc-license-txt/)
+
 ## AudioLink Development Notes
 
 ### Stack Overview
