@@ -284,6 +284,7 @@
               <div>
                 <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Performance Analytics</p>
                 <h2 class="text-xl font-semibold text-slate-900">Monitor your sonic traffic</h2>
+                <p id="analytics-context" class="text-xs text-slate-400">Overall analytics</p>
               </div>
               <div class="inline-flex items-center gap-2 rounded-full bg-[#f5f6ff] p-1 text-xs font-semibold text-slate-500">
                 <span class="rounded-full bg-white px-4 py-1 text-slate-800 shadow">Overview</span>
@@ -292,24 +293,24 @@
             </div>
             <div class="mt-6 grid gap-4 sm:grid-cols-2">
               <div class="rounded-2xl border border-studio-border bg-[#f8f9ff] p-4">
-                <p class="text-xs text-slate-400">Total scans</p>
-                <p class="mt-2 text-2xl font-semibold text-slate-900" id="inline-scan-status">Idle</p>
-                <p class="text-xs text-slate-400">Live scanner status</p>
+                <p id="analytics-card-1-label" class="text-xs text-slate-400">Total scans</p>
+                <p id="analytics-card-1-value" class="mt-2 text-2xl font-semibold text-slate-900">0</p>
+                <p id="analytics-card-1-sub" class="text-xs text-slate-400">Across all generated sounds</p>
               </div>
               <div class="rounded-2xl border border-studio-border bg-[#f8f9ff] p-4">
-                <p class="text-xs text-slate-400">Active links</p>
-                <p class="mt-2 text-2xl font-semibold text-slate-900">—</p>
-                <p class="text-xs text-slate-400">Synced from history</p>
+                <p id="analytics-card-2-label" class="text-xs text-slate-400">Active links</p>
+                <p id="analytics-card-2-value" class="mt-2 text-2xl font-semibold text-slate-900">0</p>
+                <p id="analytics-card-2-sub" class="text-xs text-slate-400">Generated sounds in history</p>
               </div>
               <div class="rounded-2xl border border-studio-border bg-[#f8f9ff] p-4">
-                <p class="text-xs text-slate-400">Engagement rate</p>
-                <p class="mt-2 text-2xl font-semibold text-slate-900">—</p>
-                <p class="text-xs text-slate-400">Calculated per session</p>
+                <p id="analytics-card-3-label" class="text-xs text-slate-400">Scans (24h)</p>
+                <p id="analytics-card-3-value" class="mt-2 text-2xl font-semibold text-slate-900">0</p>
+                <p id="analytics-card-3-sub" class="text-xs text-slate-400">Rolling 24-hour activity</p>
               </div>
               <div class="rounded-2xl border border-studio-border bg-[#f8f9ff] p-4">
-                <p class="text-xs text-slate-400">Peak activity</p>
-                <p class="mt-2 text-2xl font-semibold text-slate-900">—</p>
-                <p class="text-xs text-slate-400">Rolling 24h window</p>
+                <p id="analytics-card-4-label" class="text-xs text-slate-400">Last scan</p>
+                <p id="analytics-card-4-value" class="mt-2 text-2xl font-semibold text-slate-900">No scans yet</p>
+                <p id="analytics-card-4-sub" class="text-xs text-slate-400">Most recent scanning event</p>
               </div>
             </div>
           </section>

@@ -28,6 +28,7 @@ import {
   saveEncodeHistory as saveEncodeHistoryFromHistory,
   renderEncodeHistory as renderEncodeHistoryFromHistory,
   updateDashboardStats as updateDashboardStatsFromHistory,
+  formatRelativeTime as formatRelativeTimeFromHistory,
   addEncodeHistoryEntry as addEncodeHistoryEntryFromHistory,
   incrementEncodeHistoryScanCount as incrementEncodeHistoryScanCountFromHistory,
 } from "./new/modules/history.js";
@@ -257,8 +258,88 @@ function setTransmissionMode(mode) {
   }
 }
 
+function setAnalyticsCard(cardNumber, { label, value, sub }) {
+  const labelNode = dom[`analyticsCard${cardNumber}Label`];
+  const valueNode = dom[`analyticsCard${cardNumber}Value`];
+  const subNode = dom[`analyticsCard${cardNumber}Sub`];
+  if (labelNode) labelNode.textContent = label;
+  if (valueNode) valueNode.textContent = value;
+  if (subNode) subNode.textContent = sub;
+}
+
+function updateAnalyticsPanel() {
+  if (pageType !== "admin") return;
+  const entries = Array.isArray(scannerState.encodeHistory) ? scannerState.encodeHistory : [];
+  const selectedEntry = scannerState.currentHistoryEntryId
+    ? entries.find((entry) => entry.id === scannerState.currentHistoryEntryId) || null
+    : null;
+  const now = Date.now();
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+  if (selectedEntry) {
+    const selectedEvents = Array.isArray(selectedEntry.scanEvents) ? selectedEntry.scanEvents : [];
+    const selectedScans24h = selectedEvents.filter((ts) => Number.isFinite(ts) && now - ts <= ONE_DAY_MS).length;
+    if (dom.analyticsContext) dom.analyticsContext.textContent = "Selected sound analytics";
+    setAnalyticsCard(1, {
+      label: "Total scans",
+      value: String(selectedEntry.scanCount || 0),
+      sub: "For selected sound",
+    });
+    setAnalyticsCard(2, {
+      label: "Active links",
+      value: "1",
+      sub: "Current selected sound",
+    });
+    setAnalyticsCard(3, {
+      label: "Scans (24h)",
+      value: String(selectedScans24h),
+      sub: "Selected sound only",
+    });
+    setAnalyticsCard(4, {
+      label: "Last scan",
+      value: selectedEntry.lastScan ? formatRelativeTimeFromHistory(selectedEntry.lastScan) : "No scans yet",
+      sub: "Most recent selected scan",
+    });
+    return;
+  }
+
+  const totalScans = entries.reduce((acc, entry) => acc + (Number(entry.scanCount) || 0), 0);
+  const totalScans24h = entries.reduce((acc, entry) => {
+    const events = Array.isArray(entry.scanEvents) ? entry.scanEvents : [];
+    const count = events.filter((ts) => Number.isFinite(ts) && now - ts <= ONE_DAY_MS).length;
+    return acc + count;
+  }, 0);
+  const latestScanTs = entries.reduce((latest, entry) => {
+    const ts = Number(entry.lastScan);
+    return Number.isFinite(ts) && ts > latest ? ts : latest;
+  }, 0);
+
+  if (dom.analyticsContext) dom.analyticsContext.textContent = "Overall analytics";
+  setAnalyticsCard(1, {
+    label: "Total scans",
+    value: String(totalScans),
+    sub: "Across all generated sounds",
+  });
+  setAnalyticsCard(2, {
+    label: "Active links",
+    value: String(entries.length),
+    sub: "Generated sounds in history",
+  });
+  setAnalyticsCard(3, {
+    label: "Scans (24h)",
+    value: String(totalScans24h),
+    sub: "Rolling 24-hour activity",
+  });
+  setAnalyticsCard(4, {
+    label: "Last scan",
+    value: latestScanTs ? formatRelativeTimeFromHistory(latestScanTs) : "No scans yet",
+    sub: "Most recent scanning event",
+  });
+}
+
 function updateDashboardStats() {
   updateDashboardStatsFromHistory(scannerState, dom);
+  updateAnalyticsPanel();
 }
 
 function updateLastResultDisplays(value) {
@@ -991,6 +1072,7 @@ function loadHistoryEntryIntoCurrent(entry, { showFeedback = false } = {}) {
     saveLastGeneratedSound(payload);
     updateCurrentBadgeVisibility();
     renderEncodeHistory();
+    updateAnalyticsPanel();
     if (showFeedback) {
       showToast("Loaded selected sound.");
     }
@@ -1026,6 +1108,7 @@ function restoreLastGeneratedSound() {
     applyEncodedAudio(int16Samples, { sourceText: lastSource, skipHistory: true });
     updateCurrentBadgeVisibility();
     renderEncodeHistory();
+    updateAnalyticsPanel();
   } catch (err) {
     console.warn("Failed to restore last generated sound", err);
   }
@@ -1182,6 +1265,7 @@ function resetEncodeUI() {
   updateOpenLinkButtonState();
   updateLoopButtonState();
   updatePlayButtonState();
+  updateAnalyticsPanel();
 }
 
 function deleteHistoryEntryById(entryId) {
@@ -1291,6 +1375,7 @@ async function handleGenerateSound() {
     saveLastGeneratedSound(text);
     updateCurrentBadgeVisibility();
     renderEncodeHistory();
+    updateAnalyticsPanel();
     showToast("Sound link ready — press play to preview.");
   } catch (err) {
     console.error("Failed to generate sound", err);
@@ -1329,13 +1414,15 @@ async function handleHistoryAction(entry, intent) {
     scannerState.historyPlayEntryId &&
     scannerState.historyPlayEntryId === entry.id &&
     scannerState.historyPlayAudio;
+  const hasAnyPlaybackForEntry = !!(isPlayingThisEntry || isLoopingThisEntry);
   if (intent === "loop" && isLoopingThisEntry) {
     stopHistoryLoopPlayback();
     showToast("Looping stopped.");
     return;
   }
-  if (intent === "play" && isPlayingThisEntry) {
-    stopHistoryPlayPlayback();
+  if (intent === "play" && hasAnyPlaybackForEntry) {
+    stopHistoryPlayPlayback({ rerender: false });
+    stopHistoryLoopPlayback({ rerender: true });
     showToast("Playback stopped.");
     return;
   }

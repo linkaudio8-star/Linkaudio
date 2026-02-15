@@ -131,6 +131,7 @@ export function renderEncodeHistory({
       scannerState.historyLoopEntryId &&
       scannerState.historyLoopEntryId === entry.id &&
       scannerState.historyLoopAudio;
+    const isPlaybackActive = isPlayingThisEntry || isLoopingThisEntry;
     const isCurrentEntry = scannerState.currentHistoryEntryId && scannerState.currentHistoryEntryId === entry.id;
 
     const li = document.createElement("li");
@@ -175,11 +176,11 @@ export function renderEncodeHistory({
     const playBtn = document.createElement("button");
     playBtn.type = "button";
     playBtn.className = `history-icon-button inline-flex flex-1 items-center justify-center rounded-2xl border px-3 py-2 text-xs font-semibold transition ${
-      isPlayingThisEntry
+      isPlaybackActive
         ? "border-[#d9d2ff] bg-[#eef2ff] text-[#5b4ff5]"
         : "border-slate-100 bg-white text-slate-600 hover:border-slate-200 hover:text-slate-900"
     }`;
-    playBtn.innerHTML = isPlayingThisEntry
+    playBtn.innerHTML = isPlaybackActive
       ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24"><path fill="currentColor" d="M7 6h4v12H7zm6 0h4v12h-4z"/></svg><span class="sr-only">Pause</span>'
       : '<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg><span class="sr-only">Play</span>';
     playBtn.addEventListener("click", () => {

@@ -67,6 +67,19 @@ export const selectors = {
   scanButtonIcon: "#scan-button-icon",
   scanButtonLabel: "#scan-button-label",
   inlineScanStatus: "#inline-scan-status",
+  analyticsContext: "#analytics-context",
+  analyticsCard1Label: "#analytics-card-1-label",
+  analyticsCard1Value: "#analytics-card-1-value",
+  analyticsCard1Sub: "#analytics-card-1-sub",
+  analyticsCard2Label: "#analytics-card-2-label",
+  analyticsCard2Value: "#analytics-card-2-value",
+  analyticsCard2Sub: "#analytics-card-2-sub",
+  analyticsCard3Label: "#analytics-card-3-label",
+  analyticsCard3Value: "#analytics-card-3-value",
+  analyticsCard3Sub: "#analytics-card-3-sub",
+  analyticsCard4Label: "#analytics-card-4-label",
+  analyticsCard4Value: "#analytics-card-4-value",
+  analyticsCard4Sub: "#analytics-card-4-sub",
   checkoutSuccessCard: "#checkout-success-card",
   checkoutCancelCard: "#checkout-cancel-card",
   checkoutSuccessSession: "#checkout-success-session",
@@ -152,6 +165,19 @@ export function cacheDom(dom) {
   dom.scanButtonIcon = document.querySelector(selectors.scanButtonIcon);
   dom.scanButtonLabel = document.querySelector(selectors.scanButtonLabel);
   dom.inlineScanStatus = document.querySelector(selectors.inlineScanStatus);
+  dom.analyticsContext = document.querySelector(selectors.analyticsContext);
+  dom.analyticsCard1Label = document.querySelector(selectors.analyticsCard1Label);
+  dom.analyticsCard1Value = document.querySelector(selectors.analyticsCard1Value);
+  dom.analyticsCard1Sub = document.querySelector(selectors.analyticsCard1Sub);
+  dom.analyticsCard2Label = document.querySelector(selectors.analyticsCard2Label);
+  dom.analyticsCard2Value = document.querySelector(selectors.analyticsCard2Value);
+  dom.analyticsCard2Sub = document.querySelector(selectors.analyticsCard2Sub);
+  dom.analyticsCard3Label = document.querySelector(selectors.analyticsCard3Label);
+  dom.analyticsCard3Value = document.querySelector(selectors.analyticsCard3Value);
+  dom.analyticsCard3Sub = document.querySelector(selectors.analyticsCard3Sub);
+  dom.analyticsCard4Label = document.querySelector(selectors.analyticsCard4Label);
+  dom.analyticsCard4Value = document.querySelector(selectors.analyticsCard4Value);
+  dom.analyticsCard4Sub = document.querySelector(selectors.analyticsCard4Sub);
   dom.checkoutSuccessCard = document.querySelector(selectors.checkoutSuccessCard);
   dom.checkoutCancelCard = document.querySelector(selectors.checkoutCancelCard);
   dom.checkoutSuccessSession = document.querySelector(selectors.checkoutSuccessSession);
