@@ -170,13 +170,26 @@ export function renderEncodeHistory({
     const displayText = entry.url || entry.text || "Untitled link";
     titleWrap.innerHTML = `<p class="break-all text-base font-semibold text-slate-900">${displayText}</p><p class="text-xs text-slate-400">${formatRelativeTime(entry.timestamp)}</p>`;
     header.appendChild(titleWrap);
+    const headerActions = document.createElement("div");
+    headerActions.className = "ml-auto flex shrink-0 items-center gap-2";
     if (isCurrentEntry) {
       const currentBadge = document.createElement("span");
       currentBadge.className =
-        "ml-auto shrink-0 rounded-full bg-[#eef2ff] px-3 py-1 text-xs font-semibold text-slate-600";
+        "shrink-0 rounded-full bg-[#eef2ff] px-3 py-1 text-xs font-semibold text-slate-600";
       currentBadge.textContent = "Current";
-      header.appendChild(currentBadge);
+      headerActions.appendChild(currentBadge);
     }
+    headerActions.appendChild(
+      createIconButton(
+        "Delete sound",
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m-9 0l1 13h8l1-13M10 11v5m4-5v5"/></svg>',
+        () => {
+          void onHistoryAction(entry, "delete");
+        },
+        "h-8 w-8 flex-none rounded-lg border-slate-200 px-0 py-0 text-slate-400 hover:border-rose-200 hover:text-rose-500",
+      ),
+    );
+    header.appendChild(headerActions);
     li.appendChild(header);
 
     const stats = document.createElement("div");
@@ -234,16 +247,6 @@ export function renderEncodeHistory({
       }
     });
     secondaryControls.appendChild(copyBtn);
-    secondaryControls.appendChild(
-      createIconButton(
-        "Delete sound",
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m-9 0l1 13h8l1-13M10 11v5m4-5v5"/></svg>',
-        () => {
-          void onHistoryAction(entry, "delete");
-        },
-        "text-slate-400 hover:border-rose-200 hover:text-rose-500",
-      ),
-    );
     li.appendChild(secondaryControls);
 
     const loopToggle = document.createElement("button");
