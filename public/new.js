@@ -90,6 +90,7 @@ const ENCODE_GAIN_DEFAULT = 1;
 const ENCODE_GAIN_SLIDER_MIN = Math.round(ENCODE_GAIN_MIN * 100);
 const ENCODE_GAIN_SLIDER_MAX = Math.round(ENCODE_GAIN_MAX * 100);
 const ENCODE_GAIN_STORAGE_KEY = "audiolink-encode-gain";
+const LAST_ENCODE_STORAGE_KEY = "audiolink-last-encode";
 const recorderWorkletSource = `class GGWaveRecorder extends AudioWorkletProcessor {
   process(inputs) {
     if (!inputs || inputs.length === 0) return true;
@@ -747,6 +748,45 @@ function saveEncodeGain() {
   }
 }
 
+function getLastEncodeStorageKey() {
+  if (!scannerState.user || !scannerState.user.email) {
+    return null;
+  }
+  return `${LAST_ENCODE_STORAGE_KEY}-${scannerState.user.email}`;
+}
+
+function saveLastGeneratedSound(sourceText) {
+  const key = getLastEncodeStorageKey();
+  if (!key) return;
+  const trimmed = typeof sourceText === "string" ? sourceText.trim() : "";
+  if (!trimmed) return;
+  const payload = {
+    text: trimmed,
+    mode: "ultrasound",
+    updatedAt: Date.now(),
+  };
+  try {
+    localStorage.setItem(key, JSON.stringify(payload));
+  } catch (err) {
+    console.warn("Failed to persist last generated sound", err);
+  }
+}
+
+function loadLastGeneratedSound() {
+  const key = getLastEncodeStorageKey();
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const value = typeof parsed?.text === "string" ? parsed.text.trim() : "";
+    return value || null;
+  } catch (err) {
+    console.warn("Failed to read last generated sound", err);
+    return null;
+  }
+}
+
 function restoreEncodeGain() {
   let targetGain = ENCODE_GAIN_DEFAULT;
   try {
@@ -865,6 +905,33 @@ function applyEncodedAudio(int16Samples, { sourceText, skipHistory = false } = {
   stopLoopPlayback({ updateButton: false });
   scannerState.loopingPlayback = false;
   renderEncodedAudio({ sourceText, skipHistory, resetPlayback: true });
+}
+
+function encodeTextToInt16Samples(text) {
+  const protocolId =
+    getProtocolIdForCurrentMode() || scannerState.ggwave.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST;
+  const waveform = scannerState.ggwave.encode(scannerState.ggwaveInstance, text, protocolId, 10);
+  if (!waveform || !waveform.length) {
+    throw new Error("No waveform returned from ggwave.");
+  }
+  const waveformCopy = new Int8Array(waveform);
+  return new Int16Array(waveformCopy.buffer.slice(0));
+}
+
+function restoreLastGeneratedSound() {
+  if (pageType !== "admin" || !scannerState.user || !scannerState.ggwave || scannerState.ggwaveInstance === null) {
+    return;
+  }
+  const lastSource = loadLastGeneratedSound();
+  if (!lastSource) {
+    return;
+  }
+  try {
+    const int16Samples = encodeTextToInt16Samples(lastSource);
+    applyEncodedAudio(int16Samples, { sourceText: lastSource, skipHistory: true });
+  } catch (err) {
+    console.warn("Failed to restore last generated sound", err);
+  }
 }
 
 function updateLoopButtonState() {
@@ -1025,16 +1092,9 @@ async function handleGenerateSound() {
   }
 
   try {
-    const protocolId =
-      getProtocolIdForCurrentMode() || scannerState.ggwave.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST;
-    const waveform = scannerState.ggwave.encode(scannerState.ggwaveInstance, text, protocolId, 10);
-    if (!waveform || !waveform.length) {
-      throw new Error("No waveform returned from ggwave.");
-    }
-    const waveformCopy = new Int8Array(waveform);
-    const int16Samples = new Int16Array(waveformCopy.buffer.slice(0));
-
+    const int16Samples = encodeTextToInt16Samples(text);
     applyEncodedAudio(int16Samples, { sourceText: text });
+    saveLastGeneratedSound(text);
     showToast("Sound link ready — press play to preview.");
     if (dom.encodeInput) {
       dom.encodeInput.value = "";
@@ -1842,6 +1902,7 @@ async function initialiseScanner() {
 
   try {
     await rebuildGGWave();
+    restoreLastGeneratedSound();
     showToast("Audio engine ready — start scanning anytime.");
   } catch (err) {
     console.error("Failed to initialise GGWave", err);
