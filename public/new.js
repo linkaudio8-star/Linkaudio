@@ -1309,8 +1309,8 @@ async function handleHistoryAction(entry, intent) {
     return;
   }
 
-  loadHistoryEntryIntoCurrent(entry, { showFeedback: intent === "select" });
   if (intent === "select") {
+    loadHistoryEntryIntoCurrent(entry, { showFeedback: true });
     return;
   }
 
