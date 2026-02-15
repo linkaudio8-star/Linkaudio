@@ -56,7 +56,7 @@ const scannerState = {
   scanTimeout: null,
   activeState: "idle",
   user: null,
-  transmissionMode: "audible",
+  transmissionMode: "ultrasound",
   encodedBlob: null,
   encodedWaveform: null,
   encodedSamples: null,
@@ -197,25 +197,17 @@ function renderEncodeHistory() {
 
 function updateModeUI() {
   if (dom.modeLabel) {
-    dom.modeLabel.textContent = scannerState.transmissionMode === "ultrasound" ? "Ultrasound Mode" : "Audible Mode";
+    dom.modeLabel.textContent = "Ultrasound Mode";
   }
-  if (dom.modeAudible && dom.modeUltrasound) {
-    const isAudible = scannerState.transmissionMode === "audible";
-    const isUltra = scannerState.transmissionMode === "ultrasound";
-    dom.modeAudible.classList.toggle("bg-white", isAudible);
-    dom.modeAudible.classList.toggle("shadow", isAudible);
-    dom.modeAudible.classList.toggle("text-slate-900", isAudible);
-    dom.modeAudible.classList.toggle("text-slate-500", !isAudible);
-    dom.modeUltrasound.classList.toggle("bg-white", isUltra);
-    dom.modeUltrasound.classList.toggle("shadow", isUltra);
-    dom.modeUltrasound.classList.toggle("text-slate-900", isUltra);
-    dom.modeUltrasound.classList.toggle("text-slate-500", !isUltra);
+  if (dom.modeUltrasound) {
+    dom.modeUltrasound.classList.add("bg-white", "shadow", "text-slate-900");
+    dom.modeUltrasound.classList.remove("text-slate-500");
   }
   if (dom.dashboardModeLabel) {
-    dom.dashboardModeLabel.textContent = scannerState.transmissionMode === "ultrasound" ? "Ultrasound" : "Audible";
+    dom.dashboardModeLabel.textContent = "Ultrasound";
   }
   document.querySelectorAll("[data-mode-label-secondary]").forEach((node) => {
-    node.textContent = scannerState.transmissionMode === "ultrasound" ? "Ultrasound" : "Audible";
+    node.textContent = "Ultrasound";
   });
 }
 
@@ -247,10 +239,11 @@ async function confirmCheckoutSession(sessionId) {
 }
 
 function setTransmissionMode(mode) {
-  const normalized = mode === "ultrasound" ? "ultrasound" : "audible";
-  scannerState.transmissionMode = normalized;
+  scannerState.transmissionMode = "ultrasound";
   updateModeUI();
-  showToast(`${normalized === "ultrasound" ? "Ultrasound" : "Audible"} mode active for encoding.`);
+  if (mode === "ultrasound") {
+    showToast("Ultrasound mode active for encoding.");
+  }
 }
 
 function updateDashboardStats() {
@@ -1726,7 +1719,6 @@ function wireEvents() {
     openOverlay({ autoStart: true });
   });
 
-  dom.modeAudible?.addEventListener("click", () => setTransmissionMode("audible"));
   dom.modeUltrasound?.addEventListener("click", () => setTransmissionMode("ultrasound"));
 
   dom.headerUser?.addEventListener("click", (event) => {

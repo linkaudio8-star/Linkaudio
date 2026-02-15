@@ -26,7 +26,7 @@ export function loadEncodeHistory(scannerState) {
             text: item.text || "",
             url: item.url,
             timestamp: item.timestamp || Date.now(),
-            mode: item.mode === "ultrasound" ? "ultrasound" : "audible",
+            mode: "ultrasound",
             scanCount: typeof item.scanCount === "number" && Number.isFinite(item.scanCount) ? item.scanCount : 0,
             lastScan: typeof item.lastScan === "number" && Number.isFinite(item.lastScan) ? item.lastScan : null,
             scanEvents: Array.isArray(item.scanEvents)
@@ -144,7 +144,7 @@ export function renderEncodeHistory({
     const modeBadge = document.createElement("span");
     modeBadge.className =
       "ml-auto shrink-0 rounded-full bg-[#f4f5ff] px-3 py-1 text-xs font-semibold text-slate-500";
-    modeBadge.textContent = entry.mode === "ultrasound" ? "Ultrasound" : "Audible";
+    modeBadge.textContent = "Ultrasound";
     header.appendChild(modeBadge);
     li.appendChild(header);
 

@@ -166,7 +166,7 @@
       <div class="sr-only" aria-hidden="true">
         <span id="dashboard-total-links">0</span>
         <span id="dashboard-last-generated">—</span>
-        <span id="dashboard-mode-label">Audible</span>
+        <span id="dashboard-mode-label">Ultrasound</span>
         <span id="dashboard-last-result">None</span>
         <span id="dashboard-user-email">—</span>
         <span id="dashboard-next-payment">—</span>
@@ -179,17 +179,17 @@
               <div class="space-y-2">
                 <p class="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Create Sound Link</p>
                 <h1 class="text-2xl font-semibold text-slate-900">
-                  Encode any message or URL into an ultrasound signature
+                  Encode any URL into an ultrasound signature
                 </h1>
               </div>
 
               <div class="space-y-3">
-                <label for="new-encode-input" class="text-sm font-semibold text-slate-600">Message or URL</label>
+                <label for="new-encode-input" class="text-sm font-semibold text-slate-600">URL</label>
                 <textarea
                   id="new-encode-input"
                   rows="3"
                   class="w-full rounded-3xl border border-studio-border bg-[#f8f9ff] px-4 py-4 text-sm text-slate-800 shadow-inner focus:border-[#a58bff] focus:outline-none focus:ring-2 focus:ring-[#c3b5ff]/40"
-                  placeholder="Enter your message or paste a URL..."
+                  placeholder="Paste a URL..."
                 ></textarea>
               </div>
 
@@ -206,21 +206,15 @@
                       <p class="text-xs text-slate-400">Silent transmission above 18kHz</p>
                     </div>
                   </div>
-                  <div class="text-right text-xs font-semibold text-emerald-500">
-                    <span id="mode-toggle-label" class="text-emerald-600">Audible Mode</span>
-                    <span class="block text-[11px] text-emerald-400">Active</span>
+                  <div class="text-right text-xs font-semibold text-slate-500">
+                    <span id="mode-toggle-label">Ultrasound Mode</span>
                   </div>
                 </div>
                 <div class="mt-4 flex gap-2 rounded-full bg-white p-1 text-sm font-semibold text-slate-500">
                   <button
-                    id="mode-audible"
-                    class="flex-1 rounded-full px-4 py-2 text-slate-500 transition"
-                  >
-                    Audible
-                  </button>
-                  <button
                     id="mode-ultrasound"
-                    class="flex-1 rounded-full px-4 py-2 text-slate-500 transition"
+                    class="w-full rounded-full px-4 py-2 text-slate-900 shadow transition"
+                    type="button"
                   >
                     Ultrasound
                   </button>
@@ -403,7 +397,7 @@
 
           <div class="space-y-4" id="scan-state-scanning">
             <p class="rounded-2xl bg-[#f7f8fe] p-4 text-sm text-slate-500">
-              Keep your speaker within 1 meter for best results. Switching between audible and ultrasonic modes is automatic.
+              Keep your speaker within 1 meter for best results. Ultrasound mode is used for decoding.
             </p>
             <button
               id="scan-stop-button"
