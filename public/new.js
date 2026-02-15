@@ -91,6 +91,7 @@ const ENCODE_GAIN_SLIDER_MIN = Math.round(ENCODE_GAIN_MIN * 100);
 const ENCODE_GAIN_SLIDER_MAX = Math.round(ENCODE_GAIN_MAX * 100);
 const ENCODE_GAIN_STORAGE_KEY = "audiolink-encode-gain";
 const LAST_ENCODE_STORAGE_KEY = "audiolink-last-encode";
+const ENCODE_DRAFT_STORAGE_KEY = "audiolink-encode-draft";
 const recorderWorkletSource = `class GGWaveRecorder extends AudioWorkletProcessor {
   process(inputs) {
     if (!inputs || inputs.length === 0) return true;
@@ -456,12 +457,18 @@ function applyUserState() {
   }
 
   if (loggedIn) {
+    if (dom.encodeInput) {
+      dom.encodeInput.value = loadEncodeDraft();
+    }
     loadEncodeHistory();
     renderEncodeHistory();
     updateDashboardStats();
     const last = scannerState.encodeHistory[0];
     updateLastResultDisplays(last ? last.text : "None");
   } else {
+    if (dom.encodeInput) {
+      dom.encodeInput.value = "";
+    }
     scannerState.encodeHistory = [];
     if (dom.historyList) dom.historyList.innerHTML = "";
     if (dom.historyEmpty) dom.historyEmpty.classList.remove("hidden");
@@ -755,6 +762,13 @@ function getLastEncodeStorageKey() {
   return `${LAST_ENCODE_STORAGE_KEY}-${scannerState.user.email}`;
 }
 
+function getEncodeDraftStorageKey() {
+  if (!scannerState.user || !scannerState.user.email) {
+    return null;
+  }
+  return `${ENCODE_DRAFT_STORAGE_KEY}-${scannerState.user.email}`;
+}
+
 function saveLastGeneratedSound(sourceText) {
   const key = getLastEncodeStorageKey();
   if (!key) return;
@@ -784,6 +798,29 @@ function loadLastGeneratedSound() {
   } catch (err) {
     console.warn("Failed to read last generated sound", err);
     return null;
+  }
+}
+
+function saveEncodeDraft(text) {
+  const key = getEncodeDraftStorageKey();
+  if (!key) return;
+  const value = typeof text === "string" ? text : "";
+  try {
+    localStorage.setItem(key, value);
+  } catch (err) {
+    console.warn("Failed to persist encode draft", err);
+  }
+}
+
+function loadEncodeDraft() {
+  const key = getEncodeDraftStorageKey();
+  if (!key) return "";
+  try {
+    const raw = localStorage.getItem(key);
+    return typeof raw === "string" ? raw : "";
+  } catch (err) {
+    console.warn("Failed to read encode draft", err);
+    return "";
   }
 }
 
@@ -1094,6 +1131,7 @@ async function handleGenerateSound() {
   try {
     const int16Samples = encodeTextToInt16Samples(text);
     applyEncodedAudio(int16Samples, { sourceText: text });
+    saveEncodeDraft(text);
     saveLastGeneratedSound(text);
     showToast("Sound link ready — press play to preview.");
     if (dom.encodeInput) {
@@ -1832,6 +1870,11 @@ function wireEvents() {
 
   dom.generateButton?.addEventListener("click", () => {
     void handleGenerateSound();
+  });
+
+  dom.encodeInput?.addEventListener("input", (event) => {
+    const value = event?.target && typeof event.target.value === "string" ? event.target.value : "";
+    saveEncodeDraft(value);
   });
 
   dom.encodeVolume?.addEventListener("input", handleEncodeGainChange);
