@@ -488,6 +488,7 @@ function applyUserState() {
     updateLastResultDisplays("None");
   }
   updateCurrentBadgeVisibility();
+  updateOpenLinkButtonState();
 }
 
 function openLoginOverlay({ mode } = {}) {
@@ -846,6 +847,13 @@ function loadEncodeDraft() {
   }
 }
 
+function updateOpenLinkButtonState() {
+  if (!dom.openLinkButtonGenerated) return;
+  const fallbackFromInput = resolveGeneratedTargetUrl(dom.encodeInput?.value || "");
+  const hasTarget = !!(scannerState.encodedTargetUrl || fallbackFromInput);
+  dom.openLinkButtonGenerated.disabled = !hasTarget;
+}
+
 function restoreEncodeGain() {
   let targetGain = ENCODE_GAIN_DEFAULT;
   try {
@@ -939,7 +947,7 @@ function renderEncodedAudio({ sourceText, skipHistory = false, resetPlayback = f
   if (dom.playButton) dom.playButton.disabled = false;
   if (dom.playLoopButton) dom.playLoopButton.disabled = false;
   if (dom.downloadButton) dom.downloadButton.disabled = false;
-  if (dom.openLinkButtonGenerated) dom.openLinkButtonGenerated.disabled = !scannerState.encodedTargetUrl;
+  updateOpenLinkButtonState();
   if (dom.deleteButtonGenerated) dom.deleteButtonGenerated.disabled = false;
 
   if (!skipHistory && sourceText) {
@@ -1132,6 +1140,7 @@ function resetEncodeUI() {
     dom.previewAudio.classList.add("hidden");
   }
   updateCurrentBadgeVisibility();
+  updateOpenLinkButtonState();
   updateLoopButtonState();
 }
 
@@ -2009,6 +2018,7 @@ function wireEvents() {
   dom.encodeInput?.addEventListener("input", (event) => {
     const value = event?.target && typeof event.target.value === "string" ? event.target.value : "";
     saveEncodeDraft(value);
+    updateOpenLinkButtonState();
   });
 
   dom.encodeVolume?.addEventListener("input", handleEncodeGainChange);
