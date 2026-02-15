@@ -1,0 +1,7 @@
+node_modules/
+.home/
+data/
+data_tmp/
+public/vendor/
+pitch/
+*.log
