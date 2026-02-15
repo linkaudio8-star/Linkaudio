@@ -148,9 +148,7 @@ export function renderEncodeHistory({
     const isPlayingThisEntry =
       scannerState.historyPlayEntryId &&
       scannerState.historyPlayEntryId === entry.id &&
-      scannerState.historyPlayAudio &&
-      !scannerState.historyPlayAudio.paused &&
-      !scannerState.historyPlayAudio.ended;
+      scannerState.historyPlayAudio;
     const isLoopingThisEntry =
       scannerState.historyLoopEntryId &&
       scannerState.historyLoopEntryId === entry.id &&

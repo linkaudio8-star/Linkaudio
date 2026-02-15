@@ -1332,9 +1332,7 @@ async function handleHistoryAction(entry, intent) {
   const isPlayingThisEntry =
     scannerState.historyPlayEntryId &&
     scannerState.historyPlayEntryId === entry.id &&
-    scannerState.historyPlayAudio &&
-    !scannerState.historyPlayAudio.paused &&
-    !scannerState.historyPlayAudio.ended;
+    scannerState.historyPlayAudio;
   if (intent === "loop" && isLoopingThisEntry) {
     stopHistoryLoopPlayback();
     showToast("Looping stopped.");
