@@ -72,13 +72,26 @@ export function encodePayloadToWavBlob({
   payload,
   protocolId,
   clampEncodeGain,
+  encodeVolume = 10,
+  processSamples,
 }) {
-  const waveform = scannerState.ggwave.encode(scannerState.ggwaveInstance, payload, protocolId, 10);
+  const waveform = scannerState.ggwave.encode(scannerState.ggwaveInstance, payload, protocolId, encodeVolume);
   if (!waveform || !waveform.length) {
     throw new Error("Empty waveform from ggwave");
   }
   const waveformCopy = new Int8Array(waveform);
   const int16Samples = new Int16Array(waveformCopy.buffer.slice(0));
-  const scaledSamples = applyGainToSamples(int16Samples, scannerState.encodeGain, clampEncodeGain) || int16Samples;
-  return createWavBlob(scaledSamples, scannerState.sampleRate);
+  let outputSamples =
+    applyGainToSamples(int16Samples, scannerState.encodeGain, clampEncodeGain) || int16Samples;
+  if (typeof processSamples === "function") {
+    try {
+      const processed = processSamples(outputSamples, scannerState.sampleRate);
+      if (processed && processed.length) {
+        outputSamples = processed;
+      }
+    } catch (err) {
+      console.warn("Failed to process encoded samples", err);
+    }
+  }
+  return createWavBlob(outputSamples, scannerState.sampleRate);
 }

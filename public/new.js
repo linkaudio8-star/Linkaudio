@@ -97,6 +97,26 @@ const ENCODE_GAIN_SLIDER_MAX = Math.round(ENCODE_GAIN_MAX * 100);
 const ENCODE_GAIN_STORAGE_KEY = "audiolink-encode-gain";
 const LAST_ENCODE_STORAGE_KEY = "audiolink-last-encode";
 const ENCODE_DRAFT_STORAGE_KEY = "audiolink-encode-draft";
+const DEV_AUDIO_PROFILE_QUERY_KEY = "__al_dev_audio";
+const DEV_AUDIO_PROFILE_LEGACY = "legacy";
+const DEFAULT_ENCODE_VOLUME = 10;
+const SILENT_PROFILE_ENCODE_VOLUME = 4;
+const SILENT_PROFILE_OUTPUT_GAIN = 0.55;
+const SILENT_PROFILE_HIGHPASS_CUTOFF_HZ = 17000;
+const SILENT_PROFILE_HIGHPASS_Q = 0.707;
+const SILENT_PROFILE_EDGE_FADE_MS = 8;
+
+function isLegacyAudioProfileDebugEnabled() {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    return params.get(DEV_AUDIO_PROFILE_QUERY_KEY) === DEV_AUDIO_PROFILE_LEGACY;
+  } catch (err) {
+    return false;
+  }
+}
+
+const debugLegacyAudioProfileEnabled = isLegacyAudioProfileDebugEnabled();
+
 const recorderWorkletSource = `class GGWaveRecorder extends AudioWorkletProcessor {
   process(inputs) {
     if (!inputs || inputs.length === 0) return true;
@@ -789,9 +809,13 @@ function resolveGeneratedTargetUrl(sourceText) {
 function getProtocolIdForMode(mode) {
   if (!scannerState.ggwave || !scannerState.ggwave.ProtocolId) return null;
   const { ProtocolId } = scannerState.ggwave;
-  return mode === "ultrasound"
-    ? ProtocolId.GGWAVE_PROTOCOL_ULTRASOUND_FAST
-    : ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST;
+  if (mode === "ultrasound") {
+    if (debugLegacyAudioProfileEnabled && ProtocolId.GGWAVE_PROTOCOL_ULTRASOUND_FAST) {
+      return ProtocolId.GGWAVE_PROTOCOL_ULTRASOUND_FAST;
+    }
+    return ProtocolId.GGWAVE_PROTOCOL_ULTRASOUND_NORMAL || ProtocolId.GGWAVE_PROTOCOL_ULTRASOUND_FAST;
+  }
+  return ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST;
 }
 
 function getProtocolIdForCurrentMode() {
@@ -983,6 +1007,116 @@ function applyGainToSamples(baseSamples, gain) {
   return applyGainToSamplesFromAudio(baseSamples, gain, clampEncodeGain);
 }
 
+function isSilentAudioProfileEnabled() {
+  return !debugLegacyAudioProfileEnabled;
+}
+
+function getEncodeWaveformVolume() {
+  return isSilentAudioProfileEnabled() ? SILENT_PROFILE_ENCODE_VOLUME : DEFAULT_ENCODE_VOLUME;
+}
+
+function scaleInt16Samples(int16Data, factor) {
+  const multiplier = Number(factor);
+  if (!int16Data || !Number.isFinite(multiplier) || multiplier === 1) {
+    return int16Data;
+  }
+  const output = new Int16Array(int16Data.length);
+  for (let index = 0; index < int16Data.length; index += 1) {
+    let sample = Math.round(int16Data[index] * multiplier);
+    if (sample > 32767) sample = 32767;
+    else if (sample < -32768) sample = -32768;
+    output[index] = sample;
+  }
+  return output;
+}
+
+function applyHighPassBiquadInt16(int16Data, sampleRate, cutoffHz, q = 0.707) {
+  if (!int16Data || int16Data.length < 4) {
+    return int16Data;
+  }
+  const sr = Number(sampleRate);
+  const cutoff = Number(cutoffHz);
+  if (!Number.isFinite(sr) || !Number.isFinite(cutoff) || sr <= 0 || cutoff <= 0 || cutoff >= sr / 2) {
+    return int16Data;
+  }
+
+  const omega = (2 * Math.PI * cutoff) / sr;
+  const cosOmega = Math.cos(omega);
+  const sinOmega = Math.sin(omega);
+  const alpha = sinOmega / (2 * q);
+
+  let b0 = (1 + cosOmega) / 2;
+  let b1 = -(1 + cosOmega);
+  let b2 = (1 + cosOmega) / 2;
+  let a0 = 1 + alpha;
+  let a1 = -2 * cosOmega;
+  let a2 = 1 - alpha;
+
+  b0 /= a0;
+  b1 /= a0;
+  b2 /= a0;
+  a1 /= a0;
+  a2 /= a0;
+
+  let x1 = 0;
+  let x2 = 0;
+  let y1 = 0;
+  let y2 = 0;
+  const output = new Int16Array(int16Data.length);
+  for (let index = 0; index < int16Data.length; index += 1) {
+    const x0 = int16Data[index] / 32768;
+    const y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+    x2 = x1;
+    x1 = x0;
+    y2 = y1;
+    y1 = y0;
+    const clipped = Math.max(-1, Math.min(1, y0));
+    output[index] = Math.round(clipped * 32767);
+  }
+  return output;
+}
+
+function applyEdgeFadeInt16(int16Data, sampleRate, fadeMs) {
+  if (!int16Data || !int16Data.length) {
+    return int16Data;
+  }
+  const sr = Number(sampleRate);
+  const ms = Number(fadeMs);
+  if (!Number.isFinite(sr) || !Number.isFinite(ms) || sr <= 0 || ms <= 0) {
+    return int16Data;
+  }
+  const fadeSamples = Math.max(1, Math.round((sr * ms) / 1000));
+  const span = Math.min(fadeSamples, Math.floor(int16Data.length / 2));
+  if (span <= 0) {
+    return int16Data;
+  }
+  const output = new Int16Array(int16Data);
+  for (let index = 0; index < span; index += 1) {
+    const gain = index / span;
+    output[index] = Math.round(output[index] * gain);
+    const tailIndex = output.length - 1 - index;
+    output[tailIndex] = Math.round(output[tailIndex] * gain);
+  }
+  return output;
+}
+
+function applyOutputAudioProfile(samples, sampleRate = scannerState.sampleRate) {
+  if (!samples || !samples.length) {
+    return samples;
+  }
+  if (!isSilentAudioProfileEnabled()) {
+    return samples;
+  }
+  const attenuated = scaleInt16Samples(samples, SILENT_PROFILE_OUTPUT_GAIN);
+  const filtered = applyHighPassBiquadInt16(
+    attenuated,
+    sampleRate,
+    SILENT_PROFILE_HIGHPASS_CUTOFF_HZ,
+    SILENT_PROFILE_HIGHPASS_Q,
+  );
+  return applyEdgeFadeInt16(filtered, sampleRate, SILENT_PROFILE_EDGE_FADE_MS);
+}
+
 function renderEncodedAudio({ sourceText, skipHistory = false, resetPlayback = false } = {}) {
   if (!scannerState.encodedBaseSamples) {
     return;
@@ -992,14 +1126,18 @@ function renderEncodedAudio({ sourceText, skipHistory = false, resetPlayback = f
   if (!scaledSamples) {
     return;
   }
+  const outputSamples = applyOutputAudioProfile(scaledSamples, scannerState.sampleRate);
+  if (!outputSamples) {
+    return;
+  }
 
   const previousBlobUrl = dom.previewAudio?.src || null;
   const wasPlaying = !resetPlayback && dom.previewAudio && !dom.previewAudio.paused && !dom.previewAudio.ended;
   const resumeLoop = !resetPlayback && scannerState.loopingPlayback;
 
-  scannerState.encodedSamples = scaledSamples;
-  scannerState.encodedWaveform = new Int8Array(scaledSamples.buffer.slice(0));
-  scannerState.encodedBlob = createWavBlob(scaledSamples, scannerState.sampleRate);
+  scannerState.encodedSamples = outputSamples;
+  scannerState.encodedWaveform = new Int8Array(outputSamples.buffer.slice(0));
+  scannerState.encodedBlob = createWavBlob(outputSamples, scannerState.sampleRate);
   if (sourceText !== undefined) {
     scannerState.encodedTargetUrl = resolveGeneratedTargetUrl(sourceText);
   }
@@ -1086,7 +1224,12 @@ function loadHistoryEntryIntoCurrent(entry, { showFeedback = false } = {}) {
 function encodeTextToInt16Samples(text) {
   const protocolId =
     getProtocolIdForCurrentMode() || scannerState.ggwave.ProtocolId.GGWAVE_PROTOCOL_AUDIBLE_FAST;
-  const waveform = scannerState.ggwave.encode(scannerState.ggwaveInstance, text, protocolId, 10);
+  const waveform = scannerState.ggwave.encode(
+    scannerState.ggwaveInstance,
+    text,
+    protocolId,
+    getEncodeWaveformVolume(),
+  );
   if (!waveform || !waveform.length) {
     throw new Error("No waveform returned from ggwave.");
   }
@@ -1191,6 +1334,8 @@ function encodePayloadToWavBlob(payload, protocolId) {
     payload,
     protocolId,
     clampEncodeGain,
+    encodeVolume: getEncodeWaveformVolume(),
+    processSamples: applyOutputAudioProfile,
   });
 }
 
@@ -1473,7 +1618,8 @@ async function handleHistoryAction(entry, intent) {
     try {
       const fallbackSamples = encodeTextToInt16Samples(String(payload || ""));
       const scaledFallback = applyGainToSamples(fallbackSamples, scannerState.encodeGain) || fallbackSamples;
-      historyBlob = createWavBlob(scaledFallback, scannerState.sampleRate);
+      const profiledFallback = applyOutputAudioProfile(scaledFallback, scannerState.sampleRate);
+      historyBlob = createWavBlob(profiledFallback || scaledFallback, scannerState.sampleRate);
     } catch (fallbackErr) {
       console.error("Failed to regenerate sound from history", fallbackErr);
       showToast("Unable to prepare this sound. Try regenerating it manually.");
