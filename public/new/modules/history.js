@@ -1,4 +1,39 @@
 export const MAX_HISTORY_ITEMS = 12;
+export const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+export const MAX_SCAN_EVENTS = 5000;
+
+function normalizeScanEvents(rawEvents, now = Date.now()) {
+  if (!Array.isArray(rawEvents) || rawEvents.length === 0) {
+    return [];
+  }
+  const minTs = now - ONE_DAY_MS;
+  const valid = rawEvents
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value >= minTs && value <= now);
+  if (!valid.length) {
+    return [];
+  }
+  valid.sort((a, b) => a - b);
+  if (valid.length > MAX_SCAN_EVENTS) {
+    return valid.slice(valid.length - MAX_SCAN_EVENTS);
+  }
+  return valid;
+}
+
+function scanEventsWereNormalized(rawEvents, normalizedScanEvents) {
+  if (!Array.isArray(rawEvents)) {
+    return normalizedScanEvents.length > 0;
+  }
+  if (rawEvents.length !== normalizedScanEvents.length) {
+    return true;
+  }
+  for (let i = 0; i < rawEvents.length; i += 1) {
+    if (Number(rawEvents[i]) !== normalizedScanEvents[i]) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function getEncodeHistoryKey(scannerState) {
   if (!scannerState.user || !scannerState.user.email) return null;
@@ -11,6 +46,7 @@ export function loadEncodeHistory(scannerState) {
     scannerState.encodeHistory = [];
     return;
   }
+  let shouldPersistNormalized = false;
   try {
     const raw = localStorage.getItem(key);
     if (!raw) {
@@ -18,33 +54,38 @@ export function loadEncodeHistory(scannerState) {
       return;
     }
     const parsed = JSON.parse(raw);
+    const now = Date.now();
     scannerState.encodeHistory = Array.isArray(parsed)
       ? parsed
           .filter((item) => item && item.url)
-          .map((item) => ({
-            id: item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            text: item.text || "",
-            url: item.url,
-            timestamp: item.timestamp || Date.now(),
-            mode: "ultrasound",
-            scanCount: typeof item.scanCount === "number" && Number.isFinite(item.scanCount) ? item.scanCount : 0,
-            lastScan: typeof item.lastScan === "number" && Number.isFinite(item.lastScan) ? item.lastScan : null,
-            scanEvents: Array.isArray(item.scanEvents)
-              ? item.scanEvents
-                  .map((value) => {
-                    const ts = Number(value);
-                    return Number.isFinite(ts) ? ts : null;
-                  })
-                  .filter((value) => value !== null)
-              : [],
-          }))
+          .map((item) => {
+            const rawScanEvents = Array.isArray(item.scanEvents) ? item.scanEvents : [];
+            const scanEvents = normalizeScanEvents(rawScanEvents, now);
+            if (scanEventsWereNormalized(rawScanEvents, scanEvents)) {
+              shouldPersistNormalized = true;
+            }
+            return {
+              id: item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              text: item.text || "",
+              url: item.url,
+              timestamp: item.timestamp || Date.now(),
+              mode: "ultrasound",
+              scanCount: typeof item.scanCount === "number" && Number.isFinite(item.scanCount) ? item.scanCount : 0,
+              lastScan: typeof item.lastScan === "number" && Number.isFinite(item.lastScan) ? item.lastScan : null,
+              scanEvents,
+            };
+          })
       : [];
   } catch (err) {
     console.warn("Failed to parse encode history", err);
     scannerState.encodeHistory = [];
   }
   if (scannerState.encodeHistory.length > MAX_HISTORY_ITEMS) {
+    shouldPersistNormalized = true;
     scannerState.encodeHistory.length = MAX_HISTORY_ITEMS;
+  }
+  if (shouldPersistNormalized) {
+    saveEncodeHistory(scannerState);
   }
 }
 
@@ -283,7 +324,7 @@ export function addEncodeHistoryEntry({
     mode: scannerState.transmissionMode,
     scanCount: existing?.scanCount || 0,
     lastScan: existing?.lastScan || null,
-    scanEvents: Array.isArray(existing?.scanEvents) ? existing.scanEvents.slice(-MAX_HISTORY_ITEMS) : [],
+    scanEvents: normalizeScanEvents(existing?.scanEvents),
   };
 
   scannerState.encodeHistory = scannerState.encodeHistory.filter((item) => item.url !== entry.url);
@@ -321,10 +362,7 @@ export function incrementEncodeHistoryScanCount({
     entry.scanEvents = [];
   }
   entry.scanEvents.push(now);
-  const MAX_EVENTS = 12;
-  if (entry.scanEvents.length > MAX_EVENTS) {
-    entry.scanEvents.splice(0, entry.scanEvents.length - MAX_EVENTS);
-  }
+  entry.scanEvents = normalizeScanEvents(entry.scanEvents, now);
   saveEncodeHistoryFn();
   renderEncodeHistoryFn();
   updateDashboardStatsFn();
