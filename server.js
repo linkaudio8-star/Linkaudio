@@ -249,6 +249,68 @@ function mapSoundLinkForClient(row) {
   };
 }
 
+const ANALYTICS_RANGE_MS = {
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+};
+
+function parseAnalyticsRange(value) {
+  return Object.prototype.hasOwnProperty.call(ANALYTICS_RANGE_MS, value) ? value : '24h';
+}
+
+function parseAnalyticsBucket(value, range) {
+  if (value === 'hour' || value === 'day') {
+    return value;
+  }
+  return range === '24h' ? 'hour' : 'day';
+}
+
+function parseAnalyticsLimit(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 10;
+  return Math.min(50, Math.max(1, Math.round(parsed)));
+}
+
+function parseAnalyticsLinkId(value) {
+  if (!value || value === 'all') return null;
+  return String(value);
+}
+
+function alignDateToBucket(date, bucket) {
+  const aligned = new Date(date.getTime());
+  if (bucket === 'day') {
+    aligned.setUTCHours(0, 0, 0, 0);
+    return aligned;
+  }
+  aligned.setUTCMinutes(0, 0, 0);
+  return aligned;
+}
+
+function getBucketDurationMs(bucket) {
+  return bucket === 'day' ? 24 * 60 * 60 * 1000 : 60 * 60 * 1000;
+}
+
+function buildAnalyticsWindowMeta(range, bucket) {
+  const durationMs = ANALYTICS_RANGE_MS[range] || ANALYTICS_RANGE_MS['24h'];
+  const now = new Date();
+  let end = alignDateToBucket(now, bucket);
+  if (end.getTime() <= now.getTime()) {
+    end = new Date(end.getTime() + getBucketDurationMs(bucket));
+  }
+  const endMs = end.getTime();
+  const startMs = endMs - durationMs;
+  const previousEndMs = startMs;
+  const previousStartMs = previousEndMs - durationMs;
+  return {
+    range,
+    startIso: new Date(startMs).toISOString(),
+    endIso: new Date(endMs).toISOString(),
+    previousStartIso: new Date(previousStartMs).toISOString(),
+    previousEndIso: new Date(previousEndMs).toISOString(),
+  };
+}
+
 function getMailTransport() {
   if (mailTransport !== null) {
     return mailTransport || null;
@@ -932,6 +994,130 @@ async function handleApiRequest(req, res) {
     } catch (err) {
       console.error('Failed to list sound links', err);
       sendJson(res, 500, { error: 'Failed to load sound links.' });
+    }
+    return;
+  }
+
+  if (route === '/api/analytics/summary' && method === 'GET') {
+    if (!activeSession) {
+      sendJson(res, 401, { error: 'Authentication required.' });
+      return;
+    }
+    const user = storage.getUserById(activeSession.userId);
+    if (!user) {
+      deleteSession(cookies.session);
+      sendJson(res, 401, { error: 'Authentication required.' });
+      return;
+    }
+    const range = parseAnalyticsRange(url.searchParams.get('range'));
+    const linkId = parseAnalyticsLinkId(url.searchParams.get('linkId'));
+    const bucket = parseAnalyticsBucket(url.searchParams.get('bucket'), range);
+    const tz = String(url.searchParams.get('tz') || 'UTC');
+    const windowMeta = buildAnalyticsWindowMeta(range, bucket);
+    try {
+      const summary = storage.getAnalyticsSummary({
+        userId: user.id,
+        startIso: windowMeta.startIso,
+        endIso: windowMeta.endIso,
+        previousStartIso: windowMeta.previousStartIso,
+        previousEndIso: windowMeta.previousEndIso,
+        linkId,
+        bucket,
+      });
+      sendJson(res, 200, {
+        range,
+        bucket,
+        tz,
+        linkId: linkId || 'all',
+        startIso: windowMeta.startIso,
+        endIso: windowMeta.endIso,
+        previousStartIso: windowMeta.previousStartIso,
+        previousEndIso: windowMeta.previousEndIso,
+        ...summary,
+      });
+    } catch (err) {
+      console.error('Failed to build analytics summary', err);
+      sendJson(res, 500, { error: 'Failed to load analytics summary.' });
+    }
+    return;
+  }
+
+  if (route === '/api/analytics/timeseries' && method === 'GET') {
+    if (!activeSession) {
+      sendJson(res, 401, { error: 'Authentication required.' });
+      return;
+    }
+    const user = storage.getUserById(activeSession.userId);
+    if (!user) {
+      deleteSession(cookies.session);
+      sendJson(res, 401, { error: 'Authentication required.' });
+      return;
+    }
+    const range = parseAnalyticsRange(url.searchParams.get('range'));
+    const linkId = parseAnalyticsLinkId(url.searchParams.get('linkId'));
+    const bucket = parseAnalyticsBucket(url.searchParams.get('bucket'), range);
+    const tz = String(url.searchParams.get('tz') || 'UTC');
+    const windowMeta = buildAnalyticsWindowMeta(range, bucket);
+    try {
+      const points = storage.getAnalyticsTimeseries({
+        userId: user.id,
+        startIso: windowMeta.startIso,
+        endIso: windowMeta.endIso,
+        linkId,
+        bucket,
+      });
+      sendJson(res, 200, {
+        range,
+        bucket,
+        tz,
+        linkId: linkId || 'all',
+        startIso: windowMeta.startIso,
+        endIso: windowMeta.endIso,
+        points,
+      });
+    } catch (err) {
+      console.error('Failed to load analytics timeseries', err);
+      sendJson(res, 500, { error: 'Failed to load analytics timeseries.' });
+    }
+    return;
+  }
+
+  if (route === '/api/analytics/top-links' && method === 'GET') {
+    if (!activeSession) {
+      sendJson(res, 401, { error: 'Authentication required.' });
+      return;
+    }
+    const user = storage.getUserById(activeSession.userId);
+    if (!user) {
+      deleteSession(cookies.session);
+      sendJson(res, 401, { error: 'Authentication required.' });
+      return;
+    }
+    const range = parseAnalyticsRange(url.searchParams.get('range'));
+    const bucket = parseAnalyticsBucket(url.searchParams.get('bucket'), range);
+    const limit = parseAnalyticsLimit(url.searchParams.get('limit'));
+    const tz = String(url.searchParams.get('tz') || 'UTC');
+    const windowMeta = buildAnalyticsWindowMeta(range, bucket);
+    try {
+      const links = storage.getAnalyticsTopLinks({
+        userId: user.id,
+        startIso: windowMeta.startIso,
+        endIso: windowMeta.endIso,
+        limit,
+        bucket,
+      });
+      sendJson(res, 200, {
+        range,
+        bucket,
+        tz,
+        limit,
+        startIso: windowMeta.startIso,
+        endIso: windowMeta.endIso,
+        links,
+      });
+    } catch (err) {
+      console.error('Failed to load top links analytics', err);
+      sendJson(res, 500, { error: 'Failed to load top links analytics.' });
     }
     return;
   }

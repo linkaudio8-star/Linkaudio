@@ -308,15 +308,33 @@
           </section>
 
           <section class="card-surface p-8">
-            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Performance Analytics</p>
-                <h2 class="text-xl font-semibold text-slate-900">Monitor your sonic traffic</h2>
-                <p id="analytics-context" class="text-xs text-slate-400">Overall analytics</p>
+            <div class="flex flex-col gap-4">
+              <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Performance Analytics</p>
+                  <h2 class="text-xl font-semibold text-slate-900">Monitor your sonic traffic</h2>
+                  <p id="analytics-context" class="text-xs text-slate-400">Overall analytics</p>
+                </div>
+                <div class="inline-flex items-center gap-2 rounded-full bg-[#f5f6ff] p-1 text-xs font-semibold text-slate-500">
+                  <span id="analytics-tab-overview" class="rounded-full bg-white px-4 py-1 text-slate-800 shadow">Overview</span>
+                  <span id="analytics-tab-trends" class="rounded-full px-4 py-1">Trends</span>
+                </div>
               </div>
-              <div class="inline-flex items-center gap-2 rounded-full bg-[#f5f6ff] p-1 text-xs font-semibold text-slate-500">
-                <span class="rounded-full bg-white px-4 py-1 text-slate-800 shadow">Overview</span>
-                <span class="rounded-full px-4 py-1">Trends</span>
+              <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div class="inline-flex rounded-full bg-[#f5f6ff] p-1 text-xs font-semibold text-slate-600" role="group" aria-label="Analytics range">
+                  <button id="analytics-range-24h" data-analytics-range="24h" type="button" class="rounded-full bg-white px-3 py-1 shadow">24h</button>
+                  <button id="analytics-range-7d" data-analytics-range="7d" type="button" class="rounded-full px-3 py-1">7d</button>
+                  <button id="analytics-range-30d" data-analytics-range="30d" type="button" class="rounded-full px-3 py-1">30d</button>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                  <label for="analytics-link-scope" id="analytics-link-scope-label" class="text-xs font-semibold uppercase tracking-wide text-slate-400">Link scope</label>
+                  <select id="analytics-link-scope" class="rounded-full border border-studio-border bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
+                    <option value="all">All links</option>
+                    <option value="selected">Selected link</option>
+                  </select>
+                  <span id="analytics-updated-at" class="text-xs text-slate-400">Updated just now</span>
+                  <button id="analytics-retry-button" type="button" class="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600">Retry</button>
+                </div>
               </div>
             </div>
             <div class="mt-6 grid gap-4 sm:grid-cols-2">
@@ -324,22 +342,77 @@
                 <p id="analytics-card-1-label" class="text-xs text-slate-400">Total scans</p>
                 <p id="analytics-card-1-value" class="mt-2 text-2xl font-semibold text-slate-900">0</p>
                 <p id="analytics-card-1-sub" class="text-xs text-slate-400">Across all generated sounds</p>
+                <p id="analytics-card-1-delta" class="mt-1 text-xs font-semibold text-emerald-600">—</p>
               </div>
               <div class="rounded-2xl border border-studio-border bg-[#f8f9ff] p-4">
                 <p id="analytics-card-2-label" class="text-xs text-slate-400">Active links</p>
                 <p id="analytics-card-2-value" class="mt-2 text-2xl font-semibold text-slate-900">0</p>
                 <p id="analytics-card-2-sub" class="text-xs text-slate-400">Generated sounds in history</p>
+                <p id="analytics-card-2-delta" class="mt-1 text-xs font-semibold text-emerald-600">—</p>
               </div>
               <div class="rounded-2xl border border-studio-border bg-[#f8f9ff] p-4">
                 <p id="analytics-card-3-label" class="text-xs text-slate-400">Scans (24h)</p>
                 <p id="analytics-card-3-value" class="mt-2 text-2xl font-semibold text-slate-900">0</p>
                 <p id="analytics-card-3-sub" class="text-xs text-slate-400">Rolling 24-hour activity</p>
+                <p id="analytics-card-3-delta" class="mt-1 text-xs font-semibold text-emerald-600">—</p>
               </div>
               <div class="rounded-2xl border border-studio-border bg-[#f8f9ff] p-4">
                 <p id="analytics-card-4-label" class="text-xs text-slate-400">Last scan</p>
                 <p id="analytics-card-4-value" class="mt-2 text-2xl font-semibold text-slate-900">No scans yet</p>
                 <p id="analytics-card-4-sub" class="text-xs text-slate-400">Most recent scanning event</p>
+                <p id="analytics-card-4-delta" class="mt-1 text-xs font-semibold text-slate-500">—</p>
               </div>
+            </div>
+            <div class="mt-6 grid gap-4 xl:grid-cols-3">
+              <section class="rounded-2xl border border-studio-border bg-[#f8f9ff] p-4 xl:col-span-2">
+                <div class="flex items-center justify-between">
+                  <p id="analytics-trend-title" class="text-sm font-semibold text-slate-700">Trend</p>
+                  <span id="analytics-trend-hint" class="text-xs text-slate-400">Scans by time bucket</span>
+                </div>
+                <div id="analytics-trend-loading" class="mt-4 grid h-40 grid-cols-12 items-end gap-2">
+                  <span class="h-16 animate-pulse rounded bg-slate-200"></span>
+                  <span class="h-24 animate-pulse rounded bg-slate-200"></span>
+                  <span class="h-12 animate-pulse rounded bg-slate-200"></span>
+                  <span class="h-28 animate-pulse rounded bg-slate-200"></span>
+                  <span class="h-20 animate-pulse rounded bg-slate-200"></span>
+                  <span class="h-32 animate-pulse rounded bg-slate-200"></span>
+                  <span class="h-16 animate-pulse rounded bg-slate-200"></span>
+                  <span class="h-26 animate-pulse rounded bg-slate-200"></span>
+                  <span class="h-14 animate-pulse rounded bg-slate-200"></span>
+                  <span class="h-22 animate-pulse rounded bg-slate-200"></span>
+                  <span class="h-10 animate-pulse rounded bg-slate-200"></span>
+                  <span class="h-24 animate-pulse rounded bg-slate-200"></span>
+                </div>
+                <p id="analytics-trend-empty" class="mt-4 hidden text-sm text-slate-500">No data for selected period.</p>
+                <p id="analytics-trend-error" class="mt-4 hidden text-sm text-rose-600">Failed to load analytics.</p>
+                <div id="analytics-trend-chart" class="mt-4 flex h-40 items-end gap-1 rounded-xl border border-white/70 bg-white/70 p-3"></div>
+              </section>
+              <section class="rounded-2xl border border-studio-border bg-[#f8f9ff] p-4">
+                <div class="flex items-center justify-between">
+                  <p id="analytics-top-title" class="text-sm font-semibold text-slate-700">Top links</p>
+                  <span id="analytics-top-hint" class="text-xs text-slate-400">By scans</span>
+                </div>
+                <div id="analytics-top-loading" class="mt-4 space-y-2">
+                  <div class="h-7 animate-pulse rounded bg-slate-200"></div>
+                  <div class="h-7 animate-pulse rounded bg-slate-200"></div>
+                  <div class="h-7 animate-pulse rounded bg-slate-200"></div>
+                </div>
+                <p id="analytics-top-empty" class="mt-4 hidden text-sm text-slate-500">No links with scans yet.</p>
+                <p id="analytics-top-error" class="mt-4 hidden text-sm text-rose-600">Failed to load top links.</p>
+                <div id="analytics-top-table-wrap" class="mt-4 hidden overflow-x-auto">
+                  <table class="min-w-full text-left text-xs text-slate-600">
+                    <thead>
+                      <tr class="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-400">
+                        <th class="pb-2 pr-2" id="analytics-top-col-link">Link</th>
+                        <th class="pb-2 pr-2" id="analytics-top-col-scans">Scans</th>
+                        <th class="pb-2 pr-2" id="analytics-top-col-last">Last scan</th>
+                        <th class="pb-2" id="analytics-top-col-open-rate">Open rate</th>
+                      </tr>
+                    </thead>
+                    <tbody id="analytics-top-table-body"></tbody>
+                  </table>
+                </div>
+              </section>
             </div>
           </section>
         </div>

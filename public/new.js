@@ -29,7 +29,6 @@ import {
   saveEncodeHistory as saveEncodeHistoryFromHistory,
   renderEncodeHistory as renderEncodeHistoryFromHistory,
   updateDashboardStats as updateDashboardStatsFromHistory,
-  formatRelativeTime as formatRelativeTimeFromHistory,
   addEncodeHistoryEntry as addEncodeHistoryEntryFromHistory,
   incrementEncodeHistoryScanCount as incrementEncodeHistoryScanCountFromHistory,
 } from "./new/modules/history.js";
@@ -39,6 +38,11 @@ import {
   stopHistoryLoopPlayback as stopHistoryLoopPlaybackFromAudio,
   encodePayloadToWavBlob as encodePayloadToWavBlobFromAudio,
 } from "./new/modules/audio.js";
+import {
+  createAnalyticsState as createAnalyticsStateFromAnalytics,
+  bindAnalyticsControls as bindAnalyticsControlsFromAnalytics,
+  refreshAdminAnalytics as refreshAdminAnalyticsFromAnalytics,
+} from "./new/modules/analytics.js";
 import { applyPageTranslations, initLanguage, setLanguage, t } from "./new/modules/i18n.js";
 
 const scannerState = {
@@ -86,6 +90,7 @@ const scannerState = {
   autoDecodeActive: false,
   autoDecodeInProgress: false,
   historySyncTimer: null,
+  analytics: null,
 };
 
 const pageType = document.body?.dataset?.page || "index";
@@ -309,82 +314,14 @@ function setTransmissionMode(mode) {
   }
 }
 
-function setAnalyticsCard(cardNumber, { label, value, sub }) {
-  const labelNode = dom[`analyticsCard${cardNumber}Label`];
-  const valueNode = dom[`analyticsCard${cardNumber}Value`];
-  const subNode = dom[`analyticsCard${cardNumber}Sub`];
-  if (labelNode) labelNode.textContent = label;
-  if (valueNode) valueNode.textContent = value;
-  if (subNode) subNode.textContent = sub;
-}
-
-function updateAnalyticsPanel() {
-  if (pageType !== "admin") return;
-  const entries = Array.isArray(scannerState.encodeHistory) ? scannerState.encodeHistory : [];
-  const selectedEntry = scannerState.currentHistoryEntryId
-    ? entries.find((entry) => entry.id === scannerState.currentHistoryEntryId) || null
-    : null;
-  const now = Date.now();
-  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-  if (selectedEntry) {
-    const selectedEvents = Array.isArray(selectedEntry.scanEvents) ? selectedEntry.scanEvents : [];
-    const selectedScans24h = selectedEvents.filter((ts) => Number.isFinite(ts) && now - ts <= ONE_DAY_MS).length;
-    if (dom.analyticsContext) dom.analyticsContext.textContent = t("runtime.analytics_selected_context");
-    setAnalyticsCard(1, {
-      label: t("runtime.analytics_total_scans_label"),
-      value: String(selectedEntry.scanCount || 0),
-      sub: t("runtime.analytics_total_scans_sub_selected"),
-    });
-    setAnalyticsCard(2, {
-      label: t("runtime.analytics_active_links_label"),
-      value: "1",
-      sub: t("runtime.analytics_active_links_sub_selected"),
-    });
-    setAnalyticsCard(3, {
-      label: t("runtime.analytics_scans_24h_label"),
-      value: String(selectedScans24h),
-      sub: t("runtime.analytics_scans_24h_sub_selected"),
-    });
-    setAnalyticsCard(4, {
-      label: t("runtime.analytics_last_scan_label"),
-      value: selectedEntry.lastScan ? formatRelativeTimeFromHistory(selectedEntry.lastScan) : t("runtime.history_no_scans"),
-      sub: t("runtime.analytics_last_scan_sub_selected"),
-    });
-    return;
-  }
-
-  const totalScans = entries.reduce((acc, entry) => acc + (Number(entry.scanCount) || 0), 0);
-  const totalScans24h = entries.reduce((acc, entry) => {
-    const events = Array.isArray(entry.scanEvents) ? entry.scanEvents : [];
-    const count = events.filter((ts) => Number.isFinite(ts) && now - ts <= ONE_DAY_MS).length;
-    return acc + count;
-  }, 0);
-  const latestScanTs = entries.reduce((latest, entry) => {
-    const ts = Number(entry.lastScan);
-    return Number.isFinite(ts) && ts > latest ? ts : latest;
-  }, 0);
-
-  if (dom.analyticsContext) dom.analyticsContext.textContent = t("runtime.analytics_overall_context");
-  setAnalyticsCard(1, {
-    label: t("runtime.analytics_total_scans_label"),
-    value: String(totalScans),
-    sub: t("runtime.analytics_total_scans_sub_overall"),
-  });
-  setAnalyticsCard(2, {
-    label: t("runtime.analytics_active_links_label"),
-    value: String(entries.length),
-    sub: t("runtime.analytics_active_links_sub_overall"),
-  });
-  setAnalyticsCard(3, {
-    label: t("runtime.analytics_scans_24h_label"),
-    value: String(totalScans24h),
-    sub: t("runtime.analytics_scans_24h_sub_overall"),
-  });
-  setAnalyticsCard(4, {
-    label: t("runtime.analytics_last_scan_label"),
-    value: latestScanTs ? formatRelativeTimeFromHistory(latestScanTs) : t("runtime.history_no_scans"),
-    sub: t("runtime.analytics_last_scan_sub_overall"),
+function updateAnalyticsPanel({ forceLoading = false } = {}) {
+  if (pageType !== "admin" || !scannerState.user) return;
+  void refreshAdminAnalyticsFromAnalytics({
+    dom,
+    scannerState,
+    apiRequest,
+    t,
+    forceLoading,
   });
 }
 
@@ -2524,9 +2461,16 @@ function wireEvents() {
       setLanguage(button.dataset.langSwitch || "en");
       applyPageTranslations(pageType);
       applyUserState();
-      updateAnalyticsPanel();
+      updateAnalyticsPanel({ forceLoading: true });
       updateInlineScanUI(scannerState.activeState || "idle");
     });
+  });
+  bindAnalyticsControlsFromAnalytics({
+    dom,
+    scannerState,
+    onChange: ({ forceLoading } = {}) => {
+      updateAnalyticsPanel({ forceLoading: !!forceLoading });
+    },
   });
   dom.headerSettings?.addEventListener("click", () => {
     openSettingsPanel();
@@ -2641,6 +2585,7 @@ function wireEvents() {
 
 async function initialiseScanner() {
   cacheDom();
+  scannerState.analytics = createAnalyticsStateFromAnalytics();
   initLanguage();
   applyPageTranslations(pageType);
   updatePlanUI();

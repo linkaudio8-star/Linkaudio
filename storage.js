@@ -54,6 +54,28 @@ function openDatabase(filePath) {
     CREATE INDEX IF NOT EXISTS idx_sound_links_user_updated ON sound_links (user_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_sound_links_payload_hash ON sound_links (payload_key_hash);
     CREATE INDEX IF NOT EXISTS idx_sound_link_scans_link_time ON sound_link_scans (sound_link_id, scanned_at DESC);
+    CREATE TABLE IF NOT EXISTS sound_link_scan_rollups_hourly (
+      user_id TEXT NOT NULL,
+      sound_link_id TEXT NOT NULL,
+      bucket_start TEXT NOT NULL,
+      scan_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, sound_link_id, bucket_start),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (sound_link_id) REFERENCES sound_links(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS sound_link_scan_rollups_daily (
+      user_id TEXT NOT NULL,
+      sound_link_id TEXT NOT NULL,
+      bucket_start TEXT NOT NULL,
+      scan_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (user_id, sound_link_id, bucket_start),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (sound_link_id) REFERENCES sound_links(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_sound_link_scan_rollups_hourly_window
+      ON sound_link_scan_rollups_hourly (user_id, bucket_start);
+    CREATE INDEX IF NOT EXISTS idx_sound_link_scan_rollups_daily_window
+      ON sound_link_scan_rollups_daily (user_id, bucket_start);
   `);
 
   const ensureColumn = (statement) => {
@@ -337,6 +359,36 @@ function reportSoundScan({ payloadKeyHash, scannerUserId, scannedAt }) {
          last_scan_at = @scannedAt
      WHERE id = @soundLinkId`,
   );
+  const upsertHourlyRollupStmt = db.prepare(
+    `INSERT INTO sound_link_scan_rollups_hourly (
+      user_id,
+      sound_link_id,
+      bucket_start,
+      scan_count
+    ) VALUES (
+      @userId,
+      @soundLinkId,
+      @bucketStart,
+      1
+    )
+    ON CONFLICT(user_id, sound_link_id, bucket_start)
+    DO UPDATE SET scan_count = scan_count + excluded.scan_count`,
+  );
+  const upsertDailyRollupStmt = db.prepare(
+    `INSERT INTO sound_link_scan_rollups_daily (
+      user_id,
+      sound_link_id,
+      bucket_start,
+      scan_count
+    ) VALUES (
+      @userId,
+      @soundLinkId,
+      @bucketStart,
+      1
+    )
+    ON CONFLICT(user_id, sound_link_id, bucket_start)
+    DO UPDATE SET scan_count = scan_count + excluded.scan_count`,
+  );
 
   const tx = db.transaction((params) => {
     const link = findStmt.get(params.payloadKeyHash);
@@ -352,6 +404,35 @@ function reportSoundScan({ payloadKeyHash, scannerUserId, scannedAt }) {
       soundLinkId: link.id,
       scannedAt: params.scannedAt,
     });
+    const scanDate = new Date(params.scannedAt);
+    const hourBucket = new Date(Date.UTC(
+      scanDate.getUTCFullYear(),
+      scanDate.getUTCMonth(),
+      scanDate.getUTCDate(),
+      scanDate.getUTCHours(),
+      0,
+      0,
+      0,
+    )).toISOString();
+    const dayBucket = new Date(Date.UTC(
+      scanDate.getUTCFullYear(),
+      scanDate.getUTCMonth(),
+      scanDate.getUTCDate(),
+      0,
+      0,
+      0,
+      0,
+    )).toISOString();
+    upsertHourlyRollupStmt.run({
+      userId: link.userId,
+      soundLinkId: link.id,
+      bucketStart: hourBucket,
+    });
+    upsertDailyRollupStmt.run({
+      userId: link.userId,
+      soundLinkId: link.id,
+      bucketStart: dayBucket,
+    });
     return {
       soundLinkId: link.id,
       ownerUserId: link.userId,
@@ -359,6 +440,208 @@ function reportSoundScan({ payloadKeyHash, scannerUserId, scannedAt }) {
   });
 
   return tx({ payloadKeyHash, scannerUserId: scannerUserId || null, scannedAt });
+}
+
+function getAnalyticsRollupTable(bucket = 'hour') {
+  return bucket === 'day' ? 'sound_link_scan_rollups_daily' : 'sound_link_scan_rollups_hourly';
+}
+
+function addBucketInterval(date, bucket = 'hour') {
+  const next = new Date(date.getTime());
+  if (bucket === 'day') {
+    next.setUTCDate(next.getUTCDate() + 1);
+  } else {
+    next.setUTCHours(next.getUTCHours() + 1);
+  }
+  return next;
+}
+
+function ensureAnalyticsRollupsForUser(userId) {
+  assertInitialised();
+  const scansCountRow = db.prepare(
+    `SELECT COUNT(*) AS total
+    FROM sound_link_scans sls
+    INNER JOIN sound_links sl ON sl.id = sls.sound_link_id
+    WHERE sl.user_id = ?`,
+  ).get(userId);
+  if (!Number(scansCountRow?.total)) {
+    return;
+  }
+  const rollupsCountRow = db.prepare(
+    `SELECT
+      (SELECT COUNT(*) FROM sound_link_scan_rollups_hourly WHERE user_id = ?) AS hourlyTotal,
+      (SELECT COUNT(*) FROM sound_link_scan_rollups_daily WHERE user_id = ?) AS dailyTotal`,
+  ).get(userId, userId);
+  const hasRollups = Number(rollupsCountRow?.hourlyTotal) > 0 && Number(rollupsCountRow?.dailyTotal) > 0;
+  if (!hasRollups) {
+    rebuildAnalyticsRollupsForUser(userId);
+  }
+}
+
+function rebuildAnalyticsRollupsForUser(userId) {
+  assertInitialised();
+  const tx = db.transaction((targetUserId) => {
+    db.prepare('DELETE FROM sound_link_scan_rollups_hourly WHERE user_id = ?').run(targetUserId);
+    db.prepare('DELETE FROM sound_link_scan_rollups_daily WHERE user_id = ?').run(targetUserId);
+    db.prepare(
+      `INSERT INTO sound_link_scan_rollups_hourly (user_id, sound_link_id, bucket_start, scan_count)
+      SELECT
+        sl.user_id AS user_id,
+        sls.sound_link_id AS sound_link_id,
+        strftime('%Y-%m-%dT%H:00:00.000Z', sls.scanned_at) AS bucket_start,
+        COUNT(*) AS scan_count
+      FROM sound_link_scans sls
+      INNER JOIN sound_links sl ON sl.id = sls.sound_link_id
+      WHERE sl.user_id = ?
+      GROUP BY sl.user_id, sls.sound_link_id, strftime('%Y-%m-%dT%H:00:00.000Z', sls.scanned_at)`,
+    ).run(targetUserId);
+    db.prepare(
+      `INSERT INTO sound_link_scan_rollups_daily (user_id, sound_link_id, bucket_start, scan_count)
+      SELECT
+        sl.user_id AS user_id,
+        sls.sound_link_id AS sound_link_id,
+        strftime('%Y-%m-%dT00:00:00.000Z', sls.scanned_at) AS bucket_start,
+        COUNT(*) AS scan_count
+      FROM sound_link_scans sls
+      INNER JOIN sound_links sl ON sl.id = sls.sound_link_id
+      WHERE sl.user_id = ?
+      GROUP BY sl.user_id, sls.sound_link_id, strftime('%Y-%m-%dT00:00:00.000Z', sls.scanned_at)`,
+    ).run(targetUserId);
+  });
+  tx(userId);
+}
+
+function getAnalyticsSummary({
+  userId,
+  startIso,
+  endIso,
+  previousStartIso,
+  previousEndIso,
+  linkId = null,
+  bucket = 'hour',
+}) {
+  assertInitialised();
+  ensureAnalyticsRollupsForUser(userId);
+  const table = getAnalyticsRollupTable(bucket);
+  const linkClause = linkId ? ' AND sound_link_id = @linkId' : '';
+  const queryParams = { userId, startIso, endIso, previousStartIso, previousEndIso, linkId };
+
+  const currentWindow = db.prepare(
+    `SELECT
+      COALESCE(SUM(scan_count), 0) AS scansInRange,
+      COUNT(DISTINCT sound_link_id) AS activeLinksInRange
+    FROM ${table}
+    WHERE user_id = @userId
+      AND bucket_start >= @startIso
+      AND bucket_start < @endIso${linkClause}`,
+  ).get(queryParams);
+
+  const previousWindow = db.prepare(
+    `SELECT
+      COALESCE(SUM(scan_count), 0) AS scansInRange,
+      COUNT(DISTINCT sound_link_id) AS activeLinksInRange
+    FROM ${table}
+    WHERE user_id = @userId
+      AND bucket_start >= @previousStartIso
+      AND bucket_start < @previousEndIso${linkClause}`,
+  ).get(queryParams);
+
+  const totalStats = db.prepare(
+    `SELECT
+      COALESCE(SUM(scan_count), 0) AS totalScans,
+      MAX(last_scan_at) AS lastScanAt
+    FROM sound_links
+    WHERE user_id = @userId${linkId ? ' AND id = @linkId' : ''}`,
+  ).get({ userId, linkId });
+
+  const previousLastScanRow = db.prepare(
+    `SELECT MAX(sls.scanned_at) AS lastScanAt
+    FROM sound_link_scans sls
+    INNER JOIN sound_links sl ON sl.id = sls.sound_link_id
+    WHERE sl.user_id = @userId
+      AND sls.scanned_at >= @previousStartIso
+      AND sls.scanned_at < @previousEndIso${linkId ? ' AND sl.id = @linkId' : ''}`,
+  ).get(queryParams);
+
+  return {
+    totalScans: Number(totalStats?.totalScans) || 0,
+    scansInRange: Number(currentWindow?.scansInRange) || 0,
+    previousScansInRange: Number(previousWindow?.scansInRange) || 0,
+    activeLinksInRange: Number(currentWindow?.activeLinksInRange) || 0,
+    previousActiveLinksInRange: Number(previousWindow?.activeLinksInRange) || 0,
+    lastScanAt: totalStats?.lastScanAt || null,
+    previousLastScanAt: previousLastScanRow?.lastScanAt || null,
+  };
+}
+
+function getAnalyticsTimeseries({ userId, startIso, endIso, linkId = null, bucket = 'hour' }) {
+  assertInitialised();
+  ensureAnalyticsRollupsForUser(userId);
+  const table = getAnalyticsRollupTable(bucket);
+  const rows = db.prepare(
+    `SELECT
+      bucket_start AS bucketStart,
+      COALESCE(SUM(scan_count), 0) AS scans
+    FROM ${table}
+    WHERE user_id = @userId
+      AND bucket_start >= @startIso
+      AND bucket_start < @endIso
+      ${linkId ? 'AND sound_link_id = @linkId' : ''}
+    GROUP BY bucket_start
+    ORDER BY bucket_start ASC`,
+  ).all({ userId, startIso, endIso, linkId });
+  const scansByBucket = new Map(rows.map((row) => [row.bucketStart, Number(row.scans) || 0]));
+  const points = [];
+  let cursor = new Date(startIso);
+  const end = new Date(endIso);
+  while (cursor < end) {
+    const bucketStart = cursor.toISOString();
+    points.push({
+      bucketStart,
+      scans: scansByBucket.get(bucketStart) || 0,
+    });
+    cursor = addBucketInterval(cursor, bucket);
+  }
+  return points;
+}
+
+function getAnalyticsTopLinks({ userId, startIso, endIso, limit = 10, bucket = 'hour' }) {
+  assertInitialised();
+  ensureAnalyticsRollupsForUser(userId);
+  const table = getAnalyticsRollupTable(bucket);
+  const safeLimit = Number.isFinite(Number(limit))
+    ? Math.min(50, Math.max(1, Number(limit)))
+    : 10;
+  return db.prepare(
+    `SELECT
+      sl.id AS id,
+      sl.payload_text AS payloadText,
+      sl.target_url AS targetUrl,
+      sl.last_scan_at AS lastScanAt,
+      COALESCE(SUM(r.scan_count), 0) AS scansInRange,
+      COALESCE(sl.scan_count, 0) AS totalScans
+    FROM sound_links sl
+    LEFT JOIN ${table} r
+      ON r.user_id = sl.user_id
+      AND r.sound_link_id = sl.id
+      AND r.bucket_start >= @startIso
+      AND r.bucket_start < @endIso
+    WHERE sl.user_id = @userId
+    GROUP BY sl.id
+    HAVING COALESCE(SUM(r.scan_count), 0) > 0
+    ORDER BY scansInRange DESC, sl.last_scan_at DESC
+    LIMIT @limit`,
+  ).all({
+    userId,
+    startIso,
+    endIso,
+    limit: safeLimit,
+  }).map((row) => ({
+    ...row,
+    scansInRange: Number(row.scansInRange) || 0,
+    totalScans: Number(row.totalScans) || 0,
+    openRate: null,
+  }));
 }
 
 function listUserSoundLinks(userId, sinceIso) {
@@ -406,4 +689,8 @@ module.exports = {
   upsertSoundLink,
   reportSoundScan,
   listUserSoundLinks,
+  rebuildAnalyticsRollupsForUser,
+  getAnalyticsSummary,
+  getAnalyticsTimeseries,
+  getAnalyticsTopLinks,
 };

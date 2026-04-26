@@ -82,6 +82,24 @@ export const selectors = {
   analyticsCard4Label: "#analytics-card-4-label",
   analyticsCard4Value: "#analytics-card-4-value",
   analyticsCard4Sub: "#analytics-card-4-sub",
+  analyticsCard1Delta: "#analytics-card-1-delta",
+  analyticsCard2Delta: "#analytics-card-2-delta",
+  analyticsCard3Delta: "#analytics-card-3-delta",
+  analyticsCard4Delta: "#analytics-card-4-delta",
+  analyticsRangeButtons: "[data-analytics-range]",
+  analyticsLinkScope: "#analytics-link-scope",
+  analyticsUpdatedAt: "#analytics-updated-at",
+  analyticsRetryButton: "#analytics-retry-button",
+  analyticsTrendChart: "#analytics-trend-chart",
+  analyticsTrendHint: "#analytics-trend-hint",
+  analyticsTrendLoading: "#analytics-trend-loading",
+  analyticsTrendEmpty: "#analytics-trend-empty",
+  analyticsTrendError: "#analytics-trend-error",
+  analyticsTopLoading: "#analytics-top-loading",
+  analyticsTopEmpty: "#analytics-top-empty",
+  analyticsTopError: "#analytics-top-error",
+  analyticsTopTableWrap: "#analytics-top-table-wrap",
+  analyticsTopTableBody: "#analytics-top-table-body",
   checkoutSuccessCard: "#checkout-success-card",
   checkoutCancelCard: "#checkout-cancel-card",
   checkoutSuccessSession: "#checkout-success-session",
@@ -182,6 +200,24 @@ export function cacheDom(dom) {
   dom.analyticsCard4Label = document.querySelector(selectors.analyticsCard4Label);
   dom.analyticsCard4Value = document.querySelector(selectors.analyticsCard4Value);
   dom.analyticsCard4Sub = document.querySelector(selectors.analyticsCard4Sub);
+  dom.analyticsCard1Delta = document.querySelector(selectors.analyticsCard1Delta);
+  dom.analyticsCard2Delta = document.querySelector(selectors.analyticsCard2Delta);
+  dom.analyticsCard3Delta = document.querySelector(selectors.analyticsCard3Delta);
+  dom.analyticsCard4Delta = document.querySelector(selectors.analyticsCard4Delta);
+  dom.analyticsRangeButtons = Array.from(document.querySelectorAll(selectors.analyticsRangeButtons));
+  dom.analyticsLinkScope = document.querySelector(selectors.analyticsLinkScope);
+  dom.analyticsUpdatedAt = document.querySelector(selectors.analyticsUpdatedAt);
+  dom.analyticsRetryButton = document.querySelector(selectors.analyticsRetryButton);
+  dom.analyticsTrendChart = document.querySelector(selectors.analyticsTrendChart);
+  dom.analyticsTrendHint = document.querySelector(selectors.analyticsTrendHint);
+  dom.analyticsTrendLoading = document.querySelector(selectors.analyticsTrendLoading);
+  dom.analyticsTrendEmpty = document.querySelector(selectors.analyticsTrendEmpty);
+  dom.analyticsTrendError = document.querySelector(selectors.analyticsTrendError);
+  dom.analyticsTopLoading = document.querySelector(selectors.analyticsTopLoading);
+  dom.analyticsTopEmpty = document.querySelector(selectors.analyticsTopEmpty);
+  dom.analyticsTopError = document.querySelector(selectors.analyticsTopError);
+  dom.analyticsTopTableWrap = document.querySelector(selectors.analyticsTopTableWrap);
+  dom.analyticsTopTableBody = document.querySelector(selectors.analyticsTopTableBody);
   dom.checkoutSuccessCard = document.querySelector(selectors.checkoutSuccessCard);
   dom.checkoutCancelCard = document.querySelector(selectors.checkoutCancelCard);
   dom.checkoutSuccessSession = document.querySelector(selectors.checkoutSuccessSession);
