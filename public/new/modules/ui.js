@@ -32,6 +32,7 @@ export const selectors = {
   headerLogin: "#header-login",
   headerUser: "#header-user",
   headerUserEmail: "#header-user-email",
+  headerSettings: "#header-settings",
   headerLogout: "#header-logout",
   headerGetStarted: "#header-get-started",
   dashboardUserEmail: "#dashboard-user-email",
@@ -121,6 +122,7 @@ export function cacheDom(dom) {
   dom.headerLogin = document.querySelector(selectors.headerLogin);
   dom.headerUser = document.querySelector(selectors.headerUser);
   dom.headerUserEmail = document.querySelector(selectors.headerUserEmail);
+  dom.headerSettings = document.querySelector(selectors.headerSettings);
   dom.headerLogout = document.querySelector(selectors.headerLogout);
   dom.headerGetStarted = document.querySelector(selectors.headerGetStarted);
   dom.dashboardUserEmail = document.querySelector(selectors.dashboardUserEmail);

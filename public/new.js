@@ -84,6 +84,7 @@ const scannerState = {
   autoDecodeSampleCount: 0,
   autoDecodeActive: false,
   autoDecodeInProgress: false,
+  historySyncTimer: null,
 };
 
 const pageType = document.body?.dataset?.page || "index";
@@ -106,6 +107,7 @@ const SILENT_PROFILE_OUTPUT_GAIN = 0.55;
 const SILENT_PROFILE_HIGHPASS_CUTOFF_HZ = 17000;
 const SILENT_PROFILE_HIGHPASS_Q = 0.707;
 const SILENT_PROFILE_EDGE_FADE_MS = 8;
+const HISTORY_SYNC_INTERVAL_MS = 15000;
 
 function isLegacyAudioProfileDebugEnabled() {
   try {
@@ -184,6 +186,32 @@ async function performRegister(email, password) {
 
 async function performLogout() {
   await performLogoutFromAuth(apiRequest);
+}
+
+function getPlainPasswordSessionKey(email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!normalized) return null;
+  return `audiolink-plain-password:${normalized}`;
+}
+
+function cachePlainPasswordForSession(email, password) {
+  const key = getPlainPasswordSessionKey(email);
+  if (!key) return;
+  try {
+    sessionStorage.setItem(key, String(password || ""));
+  } catch (err) {
+    console.warn("Failed to cache plain password for settings page", err);
+  }
+}
+
+function clearCachedPlainPassword(email) {
+  const key = getPlainPasswordSessionKey(email);
+  if (!key) return;
+  try {
+    sessionStorage.removeItem(key);
+  } catch (err) {
+    console.warn("Failed to clear cached plain password", err);
+  }
 }
 
 async function startPlanCheckout(plan, button) {
@@ -417,6 +445,31 @@ function updateLandingDecodeCard(value) {
   }
 }
 
+function openSettingsPanel() {
+  if (!scannerState.user) {
+    openLoginOverlay({ mode: AUTH_MODES.LOGIN });
+    return;
+  }
+  window.location.href = "/new/settings.html";
+}
+
+async function handleUserLogout() {
+  const signedInEmail = scannerState.user?.email || "";
+  stopHistorySyncPolling();
+  await performLogout();
+  stopHistoryPlayPlayback({ rerender: false });
+  stopHistoryLoopPlayback({ rerender: false });
+  clearCachedPlainPassword(signedInEmail);
+  scannerState.user = null;
+  resetBillingState();
+  applyUserState();
+  resetEncodeUI();
+  showToast("Logged out.");
+  if (pageType === "admin") {
+    window.location.href = "./index.html";
+  }
+}
+
 function incrementEncodeHistoryScanCount(rawValue) {
   incrementEncodeHistoryScanCountFromHistory({
     scannerState,
@@ -590,6 +643,7 @@ function applyUserState() {
     const last = scannerState.encodeHistory[0];
     updateLastResultDisplays(last ? last.text : "None");
     void syncEncodeHistoryFromServer();
+    startHistorySyncPolling();
   } else {
     if (dom.encodeInput) {
       dom.encodeInput.value = "";
@@ -602,6 +656,7 @@ function applyUserState() {
     if (dom.historyCount) dom.historyCount.textContent = "0 items";
     updateDashboardStats();
     updateLastResultDisplays("None");
+    stopHistorySyncPolling();
   }
   updateCurrentBadgeVisibility();
   updateOpenLinkButtonState();
@@ -714,6 +769,26 @@ async function syncEncodeHistoryFromServer() {
   } catch (err) {
     console.warn("Failed to sync history from server", err);
   }
+}
+
+function stopHistorySyncPolling() {
+  if (scannerState.historySyncTimer) {
+    window.clearInterval(scannerState.historySyncTimer);
+    scannerState.historySyncTimer = null;
+  }
+}
+
+function startHistorySyncPolling() {
+  if (pageType !== "admin" || !scannerState.user) {
+    stopHistorySyncPolling();
+    return;
+  }
+  if (scannerState.historySyncTimer) {
+    return;
+  }
+  scannerState.historySyncTimer = window.setInterval(() => {
+    void syncEncodeHistoryFromServer();
+  }, HISTORY_SYNC_INTERVAL_MS);
 }
 
 function openLoginOverlay({ mode } = {}) {
@@ -2360,6 +2435,7 @@ function wireEvents() {
       if (!user) {
         throw new Error("Invalid email or password.");
       }
+      cachePlainPasswordForSession(user.email, password);
       scannerState.user = user;
       applyUserState();
       void refreshBillingStatus();
@@ -2401,6 +2477,7 @@ function wireEvents() {
       if (!user) {
         throw new Error("Registration failed.");
       }
+      cachePlainPasswordForSession(user.email, password);
       scannerState.user = user;
       applyUserState();
       void refreshBillingStatus();
@@ -2417,18 +2494,11 @@ function wireEvents() {
     }
   });
 
-  dom.headerLogout?.addEventListener("click", async () => {
-    await performLogout();
-    stopHistoryPlayPlayback({ rerender: false });
-    stopHistoryLoopPlayback({ rerender: false });
-    scannerState.user = null;
-    resetBillingState();
-    applyUserState();
-    resetEncodeUI();
-    showToast("Logged out.");
-    if (pageType === "admin") {
-      window.location.href = "./index.html";
-    }
+  dom.headerLogout?.addEventListener("click", () => {
+    void handleUserLogout();
+  });
+  dom.headerSettings?.addEventListener("click", () => {
+    openSettingsPanel();
   });
 
   dom.dashboardScanButton?.addEventListener("click", () => {
@@ -2440,7 +2510,10 @@ function wireEvents() {
   dom.headerUser?.addEventListener("click", (event) => {
     const clickedLogout =
       dom.headerLogout && event.target instanceof Element && dom.headerLogout.contains(event.target);
+    const clickedSettings =
+      dom.headerSettings && event.target instanceof Element && dom.headerSettings.contains(event.target);
     if (clickedLogout) return;
+    if (clickedSettings) return;
     if (scannerState.user && pageType === "index") {
       window.location.href = "/new/admin.html";
     }
@@ -2453,6 +2526,18 @@ function wireEvents() {
       if (scannerState.user && pageType === "index") {
         window.location.href = "/new/admin.html";
       }
+    }
+  });
+
+  window.addEventListener("focus", () => {
+    if (pageType === "admin" && scannerState.user) {
+      void syncEncodeHistoryFromServer();
+    }
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && pageType === "admin" && scannerState.user) {
+      void syncEncodeHistoryFromServer();
     }
   });
 
@@ -2504,6 +2589,7 @@ function wireEvents() {
   });
 
   window.addEventListener("beforeunload", () => {
+    stopHistorySyncPolling();
     stopHistoryPlayPlayback({ rerender: false });
     stopHistoryLoopPlayback({ rerender: false });
     resetCountdown();

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AudioLink · Settings</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f5f7fc;
+        color: #0f172a;
+      }
+      .card-surface {
+        background: #fff;
+        border-radius: 28px;
+        border: 1px solid #edf0fb;
+        box-shadow: 0 25px 60px -35px rgba(14, 26, 75, 0.25);
+      }
+    </style>
+  </head>
+  <body data-page="settings">
+    <header class="sticky top-0 z-20 border-b border-white/60 bg-white/80 backdrop-blur">
+      <div class="mx-auto flex w-full max-w-4xl items-center justify-between px-6 py-4">
+        <div class="flex items-center gap-3">
+          <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#55d7ff] to-[#a58bff] text-white shadow-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M5 8v8m14-8v8M9 5v14m6-14v14" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-sm font-semibold text-slate-800">AudioLink Studio</p>
+            <p class="text-xs text-slate-400">Account settings</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <a
+            href="/new/admin.html"
+            class="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+          >Back to dashboard</a>
+          <button
+            id="settings-logout"
+            type="button"
+            class="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+          >Log out</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto w-full max-w-4xl px-6 py-10">
+      <section class="card-surface p-8">
+        <div class="mb-6">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Profile</p>
+          <h1 class="text-2xl font-semibold text-slate-900">Account settings</h1>
+        </div>
+
+        <div class="grid gap-5">
+          <label class="block">
+            <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-400">Email</span>
+            <input
+              id="settings-email"
+              type="email"
+              readonly
+              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
+              value="—"
+            />
+          </label>
+
+          <label class="block">
+            <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-400">Password</span>
+            <div class="flex items-center gap-2">
+              <input
+                id="settings-password"
+                type="password"
+                readonly
+                class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
+                value="********"
+              />
+              <button
+                id="settings-password-toggle"
+                type="button"
+                class="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                aria-label="Toggle password visibility"
+                title="Show/Hide password"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
+            </div>
+            <p id="settings-password-note" class="mt-2 text-xs text-slate-500">
+              Password is available only in the current browser session after sign-in.
+            </p>
+          </label>
+
+          <label class="block">
+            <span class="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-400">Subscription</span>
+            <input
+              id="settings-subscription"
+              type="text"
+              readonly
+              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900"
+              value="Free Plan"
+            />
+          </label>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const EMAIL_KEY_PREFIX = "audiolink-plain-password:";
+
+      async function apiRequest(path, { method = "GET", body } = {}) {
+        const response = await fetch(path, {
+          method,
+          headers: body ? { "Content-Type": "application/json" } : undefined,
+          body: body ? JSON.stringify(body) : undefined,
+          credentials: "include",
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const error = new Error(payload.error || "Request failed");
+          error.status = response.status;
+          throw error;
+        }
+        return payload;
+      }
+
+      function getPasswordFromSession(email) {
+        const normalized = String(email || "").trim().toLowerCase();
+        if (!normalized) return "";
+        try {
+          return sessionStorage.getItem(`${EMAIL_KEY_PREFIX}${normalized}`) || "";
+        } catch (err) {
+          return "";
+        }
+      }
+
+      function updateSubscriptionLabel(value) {
+        const subscriptionInput = document.querySelector("#settings-subscription");
+        if (!subscriptionInput) return;
+        const normalized = String(value || "").toLowerCase();
+        subscriptionInput.value = normalized === "pro" ? "Pro Plan" : "Free Plan";
+      }
+
+      async function initialiseSettingsPage() {
+        const emailInput = document.querySelector("#settings-email");
+        const passwordInput = document.querySelector("#settings-password");
+        const passwordToggle = document.querySelector("#settings-password-toggle");
+        const passwordNote = document.querySelector("#settings-password-note");
+        const logoutButton = document.querySelector("#settings-logout");
+
+        logoutButton?.addEventListener("click", async () => {
+          try {
+            await apiRequest("/api/logout", { method: "POST" });
+          } finally {
+            window.location.href = "/new/index.html";
+          }
+        });
+
+        const session = await apiRequest("/api/session").catch(() => ({ authenticated: false }));
+        if (!session.authenticated || !session.user) {
+          window.location.href = "/new/index.html";
+          return;
+        }
+
+        const email = session.user.email || "";
+        if (emailInput) {
+          emailInput.value = email || "—";
+        }
+
+        updateSubscriptionLabel(session.user.plan);
+        try {
+          const billing = await apiRequest("/api/billing/status");
+          updateSubscriptionLabel(billing.plan);
+        } catch (err) {
+          // Keep plan from session fallback
+        }
+
+        const plainPassword = getPasswordFromSession(email);
+        let showPassword = false;
+        const hasRealPassword = !!plainPassword;
+
+        if (passwordInput) {
+          passwordInput.value = hasRealPassword ? plainPassword : "********";
+          passwordInput.type = "password";
+        }
+        if (passwordNote && !hasRealPassword) {
+          passwordNote.textContent =
+            "Real password cannot be recovered from server. Sign in again in this browser to view it temporarily.";
+        }
+
+        passwordToggle?.addEventListener("click", () => {
+          if (!passwordInput) return;
+          if (!hasRealPassword) {
+            if (passwordNote) {
+              passwordNote.textContent =
+                "Real password is unavailable for this session. Sign in again to enable reveal.";
+            }
+            return;
+          }
+          showPassword = !showPassword;
+          passwordInput.type = showPassword ? "text" : "password";
+        });
+      }
+
+      initialiseSettingsPage().catch(() => {
+        window.location.href = "/new/index.html";
+      });
+    </script>
+  </body>
+</html>
