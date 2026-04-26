@@ -2,7 +2,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
-const { randomBytes, pbkdf2Sync, timingSafeEqual } = require('crypto');
+const { randomBytes, pbkdf2Sync, timingSafeEqual, createHash } = require('crypto');
 const { URL } = require('url');
 const nodemailer = require('nodemailer');
 const Stripe = require('stripe');
@@ -21,6 +21,7 @@ const SESSION_TTL_SECONDS = Math.floor(SESSION_TTL_MS / 1000);
 let mailTransport = null;
 let stripeClient = null;
 const stripePriceCache = new Map();
+const urlMatchRegex = /((https?:\/\/|www\.)[^\s]+)/i;
 
 function loadDotEnv() {
   const envPath = path.join(ROOT_DIR, '.env');
@@ -190,6 +191,62 @@ function buildSessionCookie(value, maxAgeSeconds) {
     attributes.push('Secure');
   }
   return attributes.join('; ');
+}
+
+function stripTrailingPunctuation(str) {
+  return str.replace(/[),.?!'"\]]+$/gu, '');
+}
+
+function detectFirstUrl(text) {
+  if (!text) return null;
+  const match = text.match(urlMatchRegex);
+  if (!match) return null;
+  return stripTrailingPunctuation(match[0]);
+}
+
+function normalizeUrl(rawUrl) {
+  if (!rawUrl) return null;
+  const trimmed = String(rawUrl).trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+  return `https://${trimmed}`;
+}
+
+function canonicalPayloadValue(value) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return null;
+  const detectedUrl = detectFirstUrl(trimmed);
+  const normalizedUrl = detectedUrl ? normalizeUrl(detectedUrl) : null;
+  return {
+    payloadText: trimmed,
+    normalizedValue: normalizedUrl || trimmed,
+    targetUrl: normalizedUrl,
+  };
+}
+
+function buildPayloadHash(normalizedValue) {
+  return createHash('sha256').update(normalizedValue).digest('hex');
+}
+
+function mapSoundLinkForClient(row) {
+  const scanEvents24h = Array.isArray(row.scanEvents24h)
+    ? row.scanEvents24h
+        .map((value) => Date.parse(value))
+        .filter((value) => Number.isFinite(value))
+    : [];
+  return {
+    id: row.id,
+    payloadText: row.payloadText,
+    payloadKeyHash: row.payloadKeyHash,
+    targetUrl: row.targetUrl || null,
+    scanCount: Number(row.scanCount) || 0,
+    lastScanAt: row.lastScanAt || null,
+    createdAt: row.createdAt || null,
+    updatedAt: row.updatedAt || null,
+    scanEvents24h,
+  };
 }
 
 function getMailTransport() {
@@ -758,6 +815,124 @@ async function handleApiRequest(req, res) {
       { success: true },
       { 'Set-Cookie': buildSessionCookie('', 0) },
     );
+    return;
+  }
+
+  if (route === '/api/sounds/upsert' && method === 'POST') {
+    if (!activeSession) {
+      sendJson(res, 401, { error: 'Authentication required.' });
+      return;
+    }
+    const user = storage.getUserById(activeSession.userId);
+    if (!user) {
+      deleteSession(cookies.session);
+      sendJson(res, 401, { error: 'Authentication required.' });
+      return;
+    }
+    let payload = {};
+    try {
+      payload = await readJsonBody(req);
+    } catch (err) {
+      if (err && err.code === 'PAYLOAD_TOO_LARGE') {
+        sendJson(res, 413, { error: 'Payload too large.' });
+        return;
+      }
+      if (err && err.code === 'INVALID_JSON') {
+        sendJson(res, 400, { error: 'Invalid JSON payload.' });
+        return;
+      }
+      sendJson(res, 400, { error: 'Invalid request body.' });
+      return;
+    }
+    const parsed = canonicalPayloadValue(payload.text);
+    if (!parsed) {
+      sendJson(res, 400, { error: 'A non-empty text payload is required.' });
+      return;
+    }
+    try {
+      const link = storage.upsertSoundLink({
+        userId: user.id,
+        payloadText: parsed.payloadText,
+        payloadKeyHash: buildPayloadHash(parsed.normalizedValue),
+        targetUrl: parsed.targetUrl,
+        nowIso: new Date().toISOString(),
+      });
+      sendJson(res, 200, { link: mapSoundLinkForClient(link) });
+    } catch (err) {
+      console.error('Failed to upsert sound link', err);
+      sendJson(res, 500, { error: 'Failed to save sound link.' });
+    }
+    return;
+  }
+
+  if (route === '/api/scans/report' && method === 'POST') {
+    let payload = {};
+    try {
+      payload = await readJsonBody(req);
+    } catch (err) {
+      if (err && err.code === 'PAYLOAD_TOO_LARGE') {
+        sendJson(res, 413, { error: 'Payload too large.' });
+        return;
+      }
+      if (err && err.code === 'INVALID_JSON') {
+        sendJson(res, 400, { error: 'Invalid JSON payload.' });
+        return;
+      }
+      sendJson(res, 400, { error: 'Invalid request body.' });
+      return;
+    }
+    const parsed = canonicalPayloadValue(payload.text);
+    if (!parsed) {
+      sendJson(res, 400, { error: 'A non-empty text payload is required.' });
+      return;
+    }
+    try {
+      const scanResult = storage.reportSoundScan({
+        payloadKeyHash: buildPayloadHash(parsed.normalizedValue),
+        scannerUserId: activeSession ? activeSession.userId : null,
+        scannedAt: new Date().toISOString(),
+      });
+      if (!scanResult) {
+        sendJson(res, 200, { matched: false });
+        return;
+      }
+      const isOwnSound = !!(
+        activeSession &&
+        activeSession.userId &&
+        activeSession.userId === scanResult.ownerUserId
+      );
+      sendJson(res, 200, {
+        matched: true,
+        isOwnSound,
+      });
+    } catch (err) {
+      console.error('Failed to report sound scan', err);
+      sendJson(res, 500, { error: 'Failed to report scan.' });
+    }
+    return;
+  }
+
+  if (route === '/api/sounds' && method === 'GET') {
+    if (!activeSession) {
+      sendJson(res, 401, { error: 'Authentication required.' });
+      return;
+    }
+    const user = storage.getUserById(activeSession.userId);
+    if (!user) {
+      deleteSession(cookies.session);
+      sendJson(res, 401, { error: 'Authentication required.' });
+      return;
+    }
+    try {
+      const sinceIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const links = storage
+        .listUserSoundLinks(user.id, sinceIso)
+        .map((row) => mapSoundLinkForClient(row));
+      sendJson(res, 200, { links });
+    } catch (err) {
+      console.error('Failed to list sound links', err);
+      sendJson(res, 500, { error: 'Failed to load sound links.' });
+    }
     return;
   }
 

@@ -29,7 +29,31 @@ function openDatabase(filePath) {
       expires_at INTEGER NOT NULL,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+    CREATE TABLE IF NOT EXISTS sound_links (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      payload_text TEXT NOT NULL,
+      payload_key_hash TEXT NOT NULL,
+      target_url TEXT,
+      scan_count INTEGER NOT NULL DEFAULT 0,
+      last_scan_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(user_id, payload_key_hash)
+    );
+    CREATE TABLE IF NOT EXISTS sound_link_scans (
+      id TEXT PRIMARY KEY,
+      sound_link_id TEXT NOT NULL,
+      scanner_user_id TEXT,
+      scanned_at TEXT NOT NULL,
+      FOREIGN KEY (sound_link_id) REFERENCES sound_links(id) ON DELETE CASCADE,
+      FOREIGN KEY (scanner_user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions (expires_at);
+    CREATE INDEX IF NOT EXISTS idx_sound_links_user_updated ON sound_links (user_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_sound_links_payload_hash ON sound_links (payload_key_hash);
+    CREATE INDEX IF NOT EXISTS idx_sound_link_scans_link_time ON sound_link_scans (sound_link_id, scanned_at DESC);
   `);
 
   const ensureColumn = (statement) => {
@@ -230,6 +254,143 @@ function getUserBilling(userId) {
   return stmt.get(userId);
 }
 
+function upsertSoundLink({ userId, payloadText, payloadKeyHash, targetUrl, nowIso }) {
+  assertInitialised();
+  const updateStmt = db.prepare(
+    `UPDATE sound_links
+     SET payload_text = @payloadText,
+         target_url = @targetUrl,
+         updated_at = @nowIso
+     WHERE user_id = @userId AND payload_key_hash = @payloadKeyHash`,
+  );
+  const insertStmt = db.prepare(
+    `INSERT INTO sound_links (
+      id,
+      user_id,
+      payload_text,
+      payload_key_hash,
+      target_url,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      lower(hex(randomblob(16))),
+      @userId,
+      @payloadText,
+      @payloadKeyHash,
+      @targetUrl,
+      @nowIso,
+      @nowIso
+    )`,
+  );
+  const selectStmt = db.prepare(
+    `SELECT
+      id,
+      user_id AS userId,
+      payload_text AS payloadText,
+      payload_key_hash AS payloadKeyHash,
+      target_url AS targetUrl,
+      scan_count AS scanCount,
+      last_scan_at AS lastScanAt,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM sound_links
+    WHERE user_id = @userId AND payload_key_hash = @payloadKeyHash`,
+  );
+  const tx = db.transaction((params) => {
+    const updated = updateStmt.run(params);
+    if (updated.changes === 0) {
+      insertStmt.run(params);
+    }
+    return selectStmt.get(params);
+  });
+  return tx({ userId, payloadText, payloadKeyHash, targetUrl: targetUrl || null, nowIso });
+}
+
+function reportSoundScan({ payloadKeyHash, scannerUserId, scannedAt }) {
+  assertInitialised();
+  const findStmt = db.prepare(
+    `SELECT
+      id,
+      user_id AS userId
+    FROM sound_links
+    WHERE payload_key_hash = ?
+    ORDER BY updated_at DESC
+    LIMIT 1`,
+  );
+  const insertScanStmt = db.prepare(
+    `INSERT INTO sound_link_scans (
+      id,
+      sound_link_id,
+      scanner_user_id,
+      scanned_at
+    ) VALUES (
+      lower(hex(randomblob(16))),
+      @soundLinkId,
+      @scannerUserId,
+      @scannedAt
+    )`,
+  );
+  const updateLinkStmt = db.prepare(
+    `UPDATE sound_links
+     SET scan_count = scan_count + 1,
+         last_scan_at = @scannedAt
+     WHERE id = @soundLinkId`,
+  );
+
+  const tx = db.transaction((params) => {
+    const link = findStmt.get(params.payloadKeyHash);
+    if (!link) {
+      return null;
+    }
+    insertScanStmt.run({
+      soundLinkId: link.id,
+      scannerUserId: params.scannerUserId || null,
+      scannedAt: params.scannedAt,
+    });
+    updateLinkStmt.run({
+      soundLinkId: link.id,
+      scannedAt: params.scannedAt,
+    });
+    return {
+      soundLinkId: link.id,
+      ownerUserId: link.userId,
+    };
+  });
+
+  return tx({ payloadKeyHash, scannerUserId: scannerUserId || null, scannedAt });
+}
+
+function listUserSoundLinks(userId, sinceIso) {
+  assertInitialised();
+  const linksStmt = db.prepare(
+    `SELECT
+      id,
+      user_id AS userId,
+      payload_text AS payloadText,
+      payload_key_hash AS payloadKeyHash,
+      target_url AS targetUrl,
+      scan_count AS scanCount,
+      last_scan_at AS lastScanAt,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM sound_links
+    WHERE user_id = ?
+    ORDER BY updated_at DESC`,
+  );
+  const recentScanStmt = db.prepare(
+    `SELECT scanned_at AS scannedAt
+    FROM sound_link_scans
+    WHERE sound_link_id = ? AND scanned_at >= ?
+    ORDER BY scanned_at ASC`,
+  );
+  const links = linksStmt.all(userId);
+  return links.map((link) => ({
+    ...link,
+    scanEvents24h: recentScanStmt.all(link.id, sinceIso).map((row) => row.scannedAt),
+  }));
+}
+
 module.exports = {
   initStorage,
   migrateLegacyUsers,
@@ -242,4 +403,7 @@ module.exports = {
   purgeExpiredSessions,
   updateUserPlan,
   getUserBilling,
+  upsertSoundLink,
+  reportSoundScan,
+  listUserSoundLinks,
 };

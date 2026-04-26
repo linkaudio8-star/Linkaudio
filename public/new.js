@@ -24,6 +24,7 @@ import {
   handleCheckoutNotices as handleCheckoutNoticesFromBilling,
 } from "./new/modules/billing.js";
 import {
+  MAX_HISTORY_ITEMS,
   loadEncodeHistory as loadEncodeHistoryFromHistory,
   saveEncodeHistory as saveEncodeHistoryFromHistory,
   renderEncodeHistory as renderEncodeHistoryFromHistory,
@@ -443,10 +444,24 @@ function handleDecodingSuccess(displayText) {
       dom.openLinkButton.classList.add("hidden");
     }
   }
+  void reportScanToServer(displayText);
   incrementEncodeHistoryScanCount(displayText);
   updateLastResultDisplays(displayText);
   setScanState("success");
   showToast("Decoded a message successfully.");
+}
+
+async function reportScanToServer(displayText) {
+  const payload = String(displayText || "").trim();
+  if (!payload) return;
+  try {
+    await apiRequest("/api/scans/report", {
+      method: "POST",
+      body: { text: payload },
+    });
+  } catch (err) {
+    console.warn("Failed to report scan event", err);
+  }
 }
 
 function finishAutoDecode(displayText) {
@@ -574,6 +589,7 @@ function applyUserState() {
     updateDashboardStats();
     const last = scannerState.encodeHistory[0];
     updateLastResultDisplays(last ? last.text : "None");
+    void syncEncodeHistoryFromServer();
   } else {
     if (dom.encodeInput) {
       dom.encodeInput.value = "";
@@ -589,6 +605,115 @@ function applyUserState() {
   }
   updateCurrentBadgeVisibility();
   updateOpenLinkButtonState();
+}
+
+async function upsertGeneratedSoundOnServer(sourceText) {
+  if (!scannerState.user) return;
+  const payload = String(sourceText || "").trim();
+  if (!payload) return;
+  try {
+    await apiRequest("/api/sounds/upsert", {
+      method: "POST",
+      body: { text: payload },
+    });
+  } catch (err) {
+    console.warn("Failed to upsert generated sound", err);
+  }
+}
+
+function mergeServerLinksIntoLocalHistory(links) {
+  if (!Array.isArray(links) || !links.length) return false;
+  const localByKey = new Map();
+  scannerState.encodeHistory.forEach((entry) => {
+    const key = buildHistoryLookupKey(entry?.text || entry?.url);
+    if (key) {
+      localByKey.set(key, entry);
+    }
+  });
+  let changed = false;
+  links.forEach((link) => {
+    const payloadText = typeof link?.payloadText === "string" ? link.payloadText.trim() : "";
+    if (!payloadText) return;
+    const key = buildHistoryLookupKey(payloadText);
+    if (!key) return;
+
+    const scanCount = Number.isFinite(Number(link.scanCount)) ? Number(link.scanCount) : 0;
+    const lastScanTs =
+      typeof link.lastScanAt === "string" && link.lastScanAt
+        ? Date.parse(link.lastScanAt)
+        : null;
+    const serverScanEvents = Array.isArray(link.scanEvents24h)
+      ? link.scanEvents24h
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value))
+      : [];
+
+    const existing = localByKey.get(key);
+    if (existing) {
+      const existingScanCount = Number(existing.scanCount) || 0;
+      const existingLastScan = Number(existing.lastScan) || null;
+      const existingEvents = Array.isArray(existing.scanEvents) ? existing.scanEvents : [];
+      if (
+        existingScanCount !== scanCount ||
+        existingLastScan !== (Number.isFinite(lastScanTs) ? lastScanTs : null) ||
+        existingEvents.length !== serverScanEvents.length
+      ) {
+        existing.scanCount = scanCount;
+        existing.lastScan = Number.isFinite(lastScanTs) ? lastScanTs : null;
+        existing.scanEvents = serverScanEvents;
+        changed = true;
+      }
+      return;
+    }
+
+    const createdTs =
+      typeof link.createdAt === "string" && link.createdAt
+        ? Date.parse(link.createdAt)
+        : Date.now();
+    const newEntry = {
+      id:
+        typeof link.id === "string" && link.id
+          ? link.id
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      text: payloadText,
+      url: link.targetUrl || key,
+      timestamp: Number.isFinite(createdTs) ? createdTs : Date.now(),
+      mode: "ultrasound",
+      scanCount,
+      lastScan: Number.isFinite(lastScanTs) ? lastScanTs : null,
+      scanEvents: serverScanEvents,
+    };
+    scannerState.encodeHistory.unshift(newEntry);
+    localByKey.set(key, newEntry);
+    changed = true;
+  });
+
+  if (!changed) {
+    return false;
+  }
+
+  scannerState.encodeHistory.sort((a, b) => (Number(b?.timestamp) || 0) - (Number(a?.timestamp) || 0));
+  if (scannerState.encodeHistory.length > MAX_HISTORY_ITEMS) {
+    scannerState.encodeHistory.length = MAX_HISTORY_ITEMS;
+  }
+  return true;
+}
+
+async function syncEncodeHistoryFromServer() {
+  if (!scannerState.user) return;
+  try {
+    const result = await apiRequest("/api/sounds");
+    const links = Array.isArray(result?.links) ? result.links : [];
+    const changed = mergeServerLinksIntoLocalHistory(links);
+    if (!changed) return;
+    saveEncodeHistory();
+    renderEncodeHistory();
+    updateDashboardStats();
+    const last = scannerState.encodeHistory[0];
+    updateLastResultDisplays(last ? last.text : "None");
+  } catch (err) {
+    console.warn("Failed to sync history from server", err);
+  }
 }
 
 function openLoginOverlay({ mode } = {}) {
@@ -791,6 +916,16 @@ function normalizeUrl(rawUrl) {
     return trimmed;
   }
   return `https://${trimmed}`;
+}
+
+function buildHistoryLookupKey(rawValue) {
+  const trimmed = String(rawValue || "").trim();
+  if (!trimmed) return "";
+  const detectedUrl = detectFirstUrl(trimmed);
+  if (!detectedUrl) {
+    return trimmed;
+  }
+  return normalizeUrl(detectedUrl) || trimmed;
 }
 
 function resolveGeneratedTargetUrl(sourceText) {
@@ -1472,6 +1607,7 @@ function addEncodeHistoryEntry(text) {
     updateDashboardStatsFn: updateDashboardStats,
     updateLastResultDisplays,
   });
+  void upsertGeneratedSoundOnServer(text);
 }
 
 async function handleGenerateSound() {
