@@ -1,3 +1,5 @@
+import { getCurrentLanguage, t } from "./i18n.js";
+
 export const MAX_HISTORY_ITEMS = 12;
 export const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 export const MAX_SCAN_EVENTS = 5000;
@@ -100,25 +102,26 @@ export function saveEncodeHistory(scannerState) {
 }
 
 export function formatRelativeTime(value) {
-  if (!value) return "Just now";
+  if (!value) return t("runtime.relative_just_now");
   const timestamp = typeof value === "number" ? value : Date.parse(value);
   if (Number.isNaN(timestamp)) {
-    return "Just now";
+    return t("runtime.relative_just_now");
   }
   const diff = Date.now() - timestamp;
   const seconds = Math.max(0, Math.round(diff / 1000));
+  const language = getCurrentLanguage();
   const intervals = [
-    { label: "d", seconds: 86400 },
-    { label: "h", seconds: 3600 },
-    { label: "m", seconds: 60 },
+    { label: language === "uk" ? "д" : "d", seconds: 86400 },
+    { label: language === "uk" ? "г" : "h", seconds: 3600 },
+    { label: language === "uk" ? "х" : "m", seconds: 60 },
   ];
   for (const interval of intervals) {
     if (seconds >= interval.seconds) {
       const count = Math.floor(seconds / interval.seconds);
-      return `${count}${interval.label} ago`;
+      return t("runtime.relative_suffix_ago", { value: `${count}${interval.label}` });
     }
   }
-  return "Just now";
+  return t("runtime.relative_just_now");
 }
 
 export function updateDashboardStats(scannerState, dom) {
@@ -145,13 +148,21 @@ export function renderEncodeHistory({
 
   if (!items.length) {
     dom.historyEmpty.classList.remove("hidden");
-    dom.historyCount.textContent = "0 items";
+    dom.historyCount.textContent = t("runtime.history_count_short", {
+      count: 0,
+      suffix: getCurrentLanguage() === "uk" ? "ів" : "s",
+    });
     return;
   }
 
   const totalScans = items.reduce((acc, item) => acc + (Number(item.scanCount) || 0), 0);
   dom.historyEmpty.classList.add("hidden");
-  dom.historyCount.textContent = `${items.length} item${items.length === 1 ? "" : "s"} • ${totalScans} scan${totalScans === 1 ? "" : "s"}`;
+  dom.historyCount.textContent = t("runtime.history_items_count", {
+    items: items.length,
+    itemsSuffix: items.length === 1 ? "" : getCurrentLanguage() === "uk" ? "и" : "s",
+    scans: totalScans,
+    scansSuffix: totalScans === 1 ? "" : getCurrentLanguage() === "uk" ? "ь" : "s",
+  });
 
   const createIconButton = (label, svgMarkup, handler, className = "") => {
     const button = document.createElement("button");
@@ -190,7 +201,7 @@ export function renderEncodeHistory({
     header.className = "flex min-w-0 items-start gap-3";
     const titleWrap = document.createElement("div");
     titleWrap.className = "min-w-0 flex-1";
-    const displayText = entry.url || entry.text || "Untitled link";
+    const displayText = entry.url || entry.text || t("runtime.history_untitled_link");
     titleWrap.innerHTML = `<p class="break-all text-base font-semibold text-slate-900">${displayText}</p><p class="text-xs text-slate-400">${formatRelativeTime(entry.timestamp)}</p>`;
     header.appendChild(titleWrap);
     const headerActions = document.createElement("div");
@@ -199,7 +210,7 @@ export function renderEncodeHistory({
       const currentBadge = document.createElement("span");
       currentBadge.className =
         "shrink-0 rounded-full bg-[#eef2ff] px-3 py-1 text-xs font-semibold text-slate-600";
-      currentBadge.textContent = "Current";
+      currentBadge.textContent = t("runtime.history_current");
       headerActions.appendChild(currentBadge);
     }
     header.appendChild(headerActions);
@@ -207,9 +218,9 @@ export function renderEncodeHistory({
 
     const stats = document.createElement("div");
     const scanCount = typeof entry.scanCount === "number" ? entry.scanCount : 0;
-    const lastScanLabel = entry.lastScan ? formatRelativeTime(entry.lastScan) : "No scans yet";
+    const lastScanLabel = entry.lastScan ? formatRelativeTime(entry.lastScan) : t("runtime.history_no_scans");
     stats.className = "mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500";
-    stats.innerHTML = `<span class="inline-flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-[#8b5cf6]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 12h16M4 6h16M4 18h16" /></svg>${scanCount} scan${scanCount === 1 ? "" : "s"}</span><span>Last scan: ${lastScanLabel}</span>`;
+    stats.innerHTML = `<span class="inline-flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-[#8b5cf6]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 12h16M4 6h16M4 18h16" /></svg>${scanCount} ${getCurrentLanguage() === "uk" ? "скан" : "scan"}${scanCount === 1 ? "" : getCurrentLanguage() === "uk" ? "и" : "s"}</span><span>${t("runtime.history_last_scan", { value: lastScanLabel })}</span>`;
     li.appendChild(stats);
 
     const controls = document.createElement("div");
@@ -222,15 +233,15 @@ export function renderEncodeHistory({
         : "border-slate-100 bg-white text-slate-600 hover:border-slate-200 hover:text-slate-900"
     }`;
     playBtn.innerHTML = isPlaybackActive
-      ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24"><path fill="currentColor" d="M7 6h4v12H7zm6 0h4v12h-4z"/></svg><span class="sr-only">Pause</span>'
-      : '<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg><span class="sr-only">Play</span>';
+      ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24"><path fill="currentColor" d="M7 6h4v12H7zm6 0h4v12h-4z"/></svg><span class="sr-only">${t("runtime.playback_pause")}</span>`
+      : `<svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24"><path fill="currentColor" d="M8 5v14l11-7z"/></svg><span class="sr-only">${t("runtime.playback_play")}</span>`;
     playBtn.addEventListener("click", () => {
       void onHistoryAction(entry, "play");
     });
     controls.appendChild(playBtn);
     controls.appendChild(
       createIconButton(
-        "Open link",
+        t("common.open_link"),
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h4m0 0v4m0-4l-7 7M7 11v6h6"/></svg>',
         () => {
           void onHistoryAction(entry, "open");
@@ -239,7 +250,7 @@ export function renderEncodeHistory({
     );
     controls.appendChild(
       createIconButton(
-        "Download audio",
+        t("runtime.history_download_audio"),
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 20h12M12 4v10m0 0l4-4m-4 4l-4-4"/></svg>',
         () => {
           void onHistoryAction(entry, "download");
@@ -254,20 +265,20 @@ export function renderEncodeHistory({
     copyBtn.type = "button";
     copyBtn.className =
       "rounded-2xl border border-slate-100 bg-white px-4 py-2 text-left font-semibold text-slate-600";
-    copyBtn.textContent = "Copy text";
+    copyBtn.textContent = t("runtime.history_copy_text");
     copyBtn.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(entry.text || entry.url || "");
-        showToast("Copied to clipboard.");
+        showToast(t("runtime.history_copy_success"));
       } catch (err) {
         console.warn("Clipboard copy failed", err);
-        showToast("Copy failed. Try again.");
+        showToast(t("runtime.history_copy_failed"));
       }
     });
     secondaryControls.appendChild(copyBtn);
     secondaryControls.appendChild(
       createIconButton(
-        "Delete sound",
+        t("runtime.history_delete_sound"),
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m-9 0l1 13h8l1-13M10 11v5m4-5v5"/></svg>',
         () => {
           void onHistoryAction(entry, "delete");
@@ -289,7 +300,7 @@ export function renderEncodeHistory({
       <span class="inline-flex h-4 w-8 items-center rounded-full ${isLoopingThisEntry ? "bg-emerald-400" : "bg-slate-200"}">
         <span class="block h-4 w-4 rounded-full bg-white shadow transition-transform" style="transform: translateX(${isLoopingThisEntry ? "16px" : "0px"});"></span>
       </span>
-      <span>Loop in background</span>
+      <span>${t("runtime.history_loop_background")}</span>
     `;
     loopToggle.addEventListener("click", () => {
       void onHistoryAction(entry, "loop");

@@ -98,6 +98,24 @@
           </div>
         </div>
         <div class="flex items-center gap-3 text-xs font-semibold">
+          <div class="inline-flex items-center gap-1 rounded-full border border-slate-100 bg-white/80 p-1 text-xs font-semibold">
+            <button
+              type="button"
+              data-lang-switch="en"
+              aria-pressed="true"
+              class="rounded-full px-2.5 py-1 text-slate-500"
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              data-lang-switch="uk"
+              aria-pressed="false"
+              class="rounded-full px-2.5 py-1 text-slate-500"
+            >
+              UA
+            </button>
+          </div>
           <span
             id="dashboard-plan-pill"
             class="rounded-full border border-slate-100 bg-white/80 px-4 py-1 text-slate-600 shadow-sm"
@@ -211,7 +229,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
                 </svg>
-                Generate Sound Link
+                <span id="new-generate-sound-label">Generate Sound Link</span>
               </button>
 
               <div class="rounded-3xl border border-studio-border bg-[#f7f8fe] p-5">
@@ -230,7 +248,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M8 5v14l11-7z" />
                     </svg>
-                    Play
+                    <span id="new-play-sound-label">Play</span>
                   </button>
                   <button
                     id="new-download-sound"
@@ -240,7 +258,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M6 20h12M12 4v10m0 0l4-4m-4 4l-4-4" />
                     </svg>
-                    Download
+                    <span id="new-download-sound-label">Download</span>
                   </button>
                 </div>
                 <div class="mt-4 flex items-center justify-between gap-2 text-xs text-slate-500">

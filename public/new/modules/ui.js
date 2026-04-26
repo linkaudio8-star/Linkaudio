@@ -29,6 +29,7 @@ export const selectors = {
   authForms: "[data-auth-form]",
   authError: "#auth-error",
   authTriggers: "[data-auth-trigger]",
+  langSwitchButtons: "[data-lang-switch]",
   headerLogin: "#header-login",
   headerUser: "#header-user",
   headerUserEmail: "#header-user-email",
@@ -119,6 +120,7 @@ export function cacheDom(dom) {
   dom.authForms = Array.from(document.querySelectorAll(selectors.authForms));
   dom.authError = document.querySelector(selectors.authError);
   dom.authTriggers = Array.from(document.querySelectorAll(selectors.authTriggers));
+  dom.langSwitchButtons = Array.from(document.querySelectorAll(selectors.langSwitchButtons));
   dom.headerLogin = document.querySelector(selectors.headerLogin);
   dom.headerUser = document.querySelector(selectors.headerUser);
   dom.headerUserEmail = document.querySelector(selectors.headerUserEmail);

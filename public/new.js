@@ -39,6 +39,7 @@ import {
   stopHistoryLoopPlayback as stopHistoryLoopPlaybackFromAudio,
   encodePayloadToWavBlob as encodePayloadToWavBlobFromAudio,
 } from "./new/modules/audio.js";
+import { applyPageTranslations, initLanguage, setLanguage, t } from "./new/modules/i18n.js";
 
 const scannerState = {
   ggwave: null,
@@ -257,18 +258,19 @@ function updateCurrentBadgeVisibility() {
 
 
 function updateModeUI() {
+  const isUk = document.documentElement.lang === "uk";
   if (dom.modeLabel) {
-    dom.modeLabel.textContent = "Ultrasound Mode";
+    dom.modeLabel.textContent = isUk ? "Ультразвуковий режим" : "Ultrasound Mode";
   }
   if (dom.modeUltrasound) {
     dom.modeUltrasound.classList.add("bg-white", "shadow", "text-slate-900");
     dom.modeUltrasound.classList.remove("text-slate-500");
   }
   if (dom.dashboardModeLabel) {
-    dom.dashboardModeLabel.textContent = "Ultrasound";
+    dom.dashboardModeLabel.textContent = isUk ? "Ультразвук" : "Ultrasound";
   }
   document.querySelectorAll("[data-mode-label-secondary]").forEach((node) => {
-    node.textContent = "Ultrasound";
+    node.textContent = isUk ? "Ультразвук" : "Ultrasound";
   });
 }
 
@@ -303,7 +305,7 @@ function setTransmissionMode(mode) {
   scannerState.transmissionMode = "ultrasound";
   updateModeUI();
   if (mode === "ultrasound") {
-    showToast("Ultrasound mode active for encoding.");
+    showToast(t("runtime.mode_ultrasound_toast"));
   }
 }
 
@@ -328,26 +330,26 @@ function updateAnalyticsPanel() {
   if (selectedEntry) {
     const selectedEvents = Array.isArray(selectedEntry.scanEvents) ? selectedEntry.scanEvents : [];
     const selectedScans24h = selectedEvents.filter((ts) => Number.isFinite(ts) && now - ts <= ONE_DAY_MS).length;
-    if (dom.analyticsContext) dom.analyticsContext.textContent = "Selected sound analytics";
+    if (dom.analyticsContext) dom.analyticsContext.textContent = t("runtime.analytics_selected_context");
     setAnalyticsCard(1, {
-      label: "Total scans",
+      label: t("runtime.analytics_total_scans_label"),
       value: String(selectedEntry.scanCount || 0),
-      sub: "For selected sound",
+      sub: t("runtime.analytics_total_scans_sub_selected"),
     });
     setAnalyticsCard(2, {
-      label: "Active links",
+      label: t("runtime.analytics_active_links_label"),
       value: "1",
-      sub: "Current selected sound",
+      sub: t("runtime.analytics_active_links_sub_selected"),
     });
     setAnalyticsCard(3, {
-      label: "Scans (24h)",
+      label: t("runtime.analytics_scans_24h_label"),
       value: String(selectedScans24h),
-      sub: "Selected sound only",
+      sub: t("runtime.analytics_scans_24h_sub_selected"),
     });
     setAnalyticsCard(4, {
-      label: "Last scan",
-      value: selectedEntry.lastScan ? formatRelativeTimeFromHistory(selectedEntry.lastScan) : "No scans yet",
-      sub: "Most recent selected scan",
+      label: t("runtime.analytics_last_scan_label"),
+      value: selectedEntry.lastScan ? formatRelativeTimeFromHistory(selectedEntry.lastScan) : t("runtime.history_no_scans"),
+      sub: t("runtime.analytics_last_scan_sub_selected"),
     });
     return;
   }
@@ -363,26 +365,26 @@ function updateAnalyticsPanel() {
     return Number.isFinite(ts) && ts > latest ? ts : latest;
   }, 0);
 
-  if (dom.analyticsContext) dom.analyticsContext.textContent = "Overall analytics";
+  if (dom.analyticsContext) dom.analyticsContext.textContent = t("runtime.analytics_overall_context");
   setAnalyticsCard(1, {
-    label: "Total scans",
+    label: t("runtime.analytics_total_scans_label"),
     value: String(totalScans),
-    sub: "Across all generated sounds",
+    sub: t("runtime.analytics_total_scans_sub_overall"),
   });
   setAnalyticsCard(2, {
-    label: "Active links",
+    label: t("runtime.analytics_active_links_label"),
     value: String(entries.length),
-    sub: "Generated sounds in history",
+    sub: t("runtime.analytics_active_links_sub_overall"),
   });
   setAnalyticsCard(3, {
-    label: "Scans (24h)",
+    label: t("runtime.analytics_scans_24h_label"),
     value: String(totalScans24h),
-    sub: "Rolling 24-hour activity",
+    sub: t("runtime.analytics_scans_24h_sub_overall"),
   });
   setAnalyticsCard(4, {
-    label: "Last scan",
-    value: latestScanTs ? formatRelativeTimeFromHistory(latestScanTs) : "No scans yet",
-    sub: "Most recent scanning event",
+    label: t("runtime.analytics_last_scan_label"),
+    value: latestScanTs ? formatRelativeTimeFromHistory(latestScanTs) : t("runtime.history_no_scans"),
+    sub: t("runtime.analytics_last_scan_sub_overall"),
   });
 }
 
@@ -404,7 +406,8 @@ function updateLastResultDisplays(value) {
 function updateLandingDecodeCard(value) {
   if (!dom.lastDecodeCard) return;
   const trimmed = (value || "").trim();
-  if (!trimmed || trimmed === "None") {
+  const noneValue = t("runtime.value_none");
+  if (!trimmed || trimmed === "None" || trimmed === noneValue) {
     dom.lastDecodeCard.classList.add("hidden");
     if (dom.lastDecodeLink) {
       dom.lastDecodeLink.classList.add("hidden");
@@ -464,7 +467,7 @@ async function handleUserLogout() {
   resetBillingState();
   applyUserState();
   resetEncodeUI();
-  showToast("Logged out.");
+  showToast(t("runtime.toast_logged_out"));
   if (pageType === "admin") {
     window.location.href = "./index.html";
   }
@@ -501,7 +504,7 @@ function handleDecodingSuccess(displayText) {
   incrementEncodeHistoryScanCount(displayText);
   updateLastResultDisplays(displayText);
   setScanState("success");
-  showToast("Decoded a message successfully.");
+  showToast(t("runtime.toast_decoded_success"));
 }
 
 async function reportScanToServer(displayText) {
@@ -618,7 +621,13 @@ function applyUserState() {
 
   const loggedIn = !!(scannerState.user && scannerState.user.email);
   if (dom.headerLogin) {
-    dom.headerLogin.classList.toggle("hidden", loggedIn);
+    if (loggedIn) {
+      dom.headerLogin.classList.add("hidden");
+      dom.headerLogin.classList.remove("md:inline-flex");
+    } else {
+      dom.headerLogin.classList.remove("hidden");
+      dom.headerLogin.classList.add("md:inline-flex");
+    }
   }
   if (dom.headerUser) {
     dom.headerUser.classList.toggle("hidden", !loggedIn);
@@ -641,7 +650,7 @@ function applyUserState() {
     renderEncodeHistory();
     updateDashboardStats();
     const last = scannerState.encodeHistory[0];
-    updateLastResultDisplays(last ? last.text : "None");
+    updateLastResultDisplays(last ? last.text : t("runtime.value_none"));
     void syncEncodeHistoryFromServer();
     startHistorySyncPolling();
   } else {
@@ -653,9 +662,14 @@ function applyUserState() {
     updateCurrentBadgeVisibility();
     if (dom.historyList) dom.historyList.innerHTML = "";
     if (dom.historyEmpty) dom.historyEmpty.classList.remove("hidden");
-    if (dom.historyCount) dom.historyCount.textContent = "0 items";
+    if (dom.historyCount) {
+      dom.historyCount.textContent = t("runtime.history_count_short", {
+        count: 0,
+        suffix: document.documentElement.lang === "uk" ? "ів" : "s",
+      });
+    }
     updateDashboardStats();
-    updateLastResultDisplays("None");
+    updateLastResultDisplays(t("runtime.value_none"));
     stopHistorySyncPolling();
   }
   updateCurrentBadgeVisibility();
@@ -765,7 +779,7 @@ async function syncEncodeHistoryFromServer() {
     renderEncodeHistory();
     updateDashboardStats();
     const last = scannerState.encodeHistory[0];
-    updateLastResultDisplays(last ? last.text : "None");
+    updateLastResultDisplays(last ? last.text : t("runtime.value_none"));
   } catch (err) {
     console.warn("Failed to sync history from server", err);
   }
@@ -1422,7 +1436,7 @@ function loadHistoryEntryIntoCurrent(entry, { showFeedback = false } = {}) {
     renderEncodeHistory();
     updateAnalyticsPanel();
     if (showFeedback) {
-      showToast("Loaded selected sound.");
+      showToast(t("runtime.toast_loaded_selected_sound"));
     }
     return true;
   } catch (err) {
@@ -1480,7 +1494,7 @@ function updateLoopButtonState() {
     dom.playLoopKnob.style.transform = scannerState.loopingPlayback ? "translateX(16px)" : "translateX(0px)";
   }
   if (dom.playLoopLabel) {
-    dom.playLoopLabel.textContent = "Loop in background";
+    dom.playLoopLabel.textContent = t("runtime.history_loop_background");
   }
 }
 
@@ -1495,13 +1509,14 @@ function updatePlayButtonState() {
   if (!dom.playButton) return;
   const hasAudio = !!scannerState.encodedBlob;
   const isPlaying = !!(dom.previewAudio && !dom.previewAudio.paused && !dom.previewAudio.ended);
+  const buttonLabel = isPlaying ? t("runtime.playback_pause") : t("runtime.playback_play");
   dom.playButton.disabled = !hasAudio;
   dom.playButton.setAttribute("aria-pressed", isPlaying ? "true" : "false");
   dom.playButton.classList.toggle("bg-[#eef2ff]", isPlaying);
   dom.playButton.classList.toggle("text-[#5b4ff5]", isPlaying);
   dom.playButton.innerHTML = isPlaying
-    ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M7 6h4v12H7zm6 0h4v12h-4z"/></svg>Pause'
-    : '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Play';
+    ? `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M7 6h4v12H7zm6 0h4v12h-4z"/></svg>${buttonLabel}`
+    : `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>${buttonLabel}`;
 }
 
 function stopLoopPlayback({ updateButton = true } = {}) {
@@ -1551,7 +1566,7 @@ function encodePayloadToWavBlob(payload, protocolId) {
 
 function toggleLoopPlayback() {
   if (!scannerState.encodedBlob || !dom.previewAudio) {
-    showToast("Generate a sound link first.");
+    showToast(t("runtime.toast_generate_first"));
     return;
   }
 
@@ -1559,7 +1574,7 @@ function toggleLoopPlayback() {
 
   if (scannerState.loopingPlayback) {
     stopLoopPlayback();
-    showToast("Looping stopped.");
+    showToast(t("runtime.toast_looping_stopped"));
     return;
   }
 
@@ -1574,13 +1589,13 @@ function toggleLoopPlayback() {
 
   const playPromise = dom.previewAudio.play();
   updateLoopButtonState();
-  showToast("Looping playback started.");
+  showToast(t("runtime.toast_looping_started"));
 
   if (playPromise && typeof playPromise.catch === "function") {
     playPromise.catch((err) => {
       console.warn("Loop playback failed", err);
       stopLoopPlayback();
-      showToast("Playback blocked — press play on the audio controls.");
+      showToast(t("runtime.toast_playback_blocked"));
     });
   }
 }
@@ -1647,16 +1662,16 @@ function deleteHistoryEntryById(entryId) {
   }
   updateDashboardStats();
   const last = scannerState.encodeHistory[0];
-  updateLastResultDisplays(last ? last.text : "None");
+  updateLastResultDisplays(last ? last.text : t("runtime.value_none"));
 }
 
 function deleteCurrentSound() {
-  const confirmDelete = window.confirm("Delete this sound?");
+  const confirmDelete = window.confirm(t("runtime.confirm_delete_sound"));
   if (!confirmDelete) return;
   const currentId = scannerState.currentHistoryEntryId;
   if (currentId) {
     deleteHistoryEntryById(currentId);
-    showToast("Sound deleted.");
+    showToast(t("runtime.toast_sound_deleted"));
     return;
   }
   const draft = (dom.encodeInput?.value || "").trim();
@@ -1668,7 +1683,7 @@ function deleteCurrentSound() {
   }
   clearLastGeneratedSound();
   resetEncodeUI();
-  showToast("Sound deleted.");
+  showToast(t("runtime.toast_sound_deleted"));
 }
 
 function addEncodeHistoryEntry(text) {
@@ -1687,7 +1702,7 @@ function addEncodeHistoryEntry(text) {
 
 async function handleGenerateSound() {
   if (!scannerState.user) {
-    showToast("Sign in to generate sound links.");
+    showToast(t("runtime.toast_signin_generate"));
     openLoginOverlay();
     return;
   }
@@ -1696,7 +1711,7 @@ async function handleGenerateSound() {
     await ensureAudioContext();
   } catch (err) {
     console.error("Unable to initialise audio context before encoding", err);
-    showToast("Unable to initialise audio. Check microphone permissions.");
+    showToast(t("runtime.toast_audio_init_failed"));
     return;
   }
   stopLoopPlayback();
@@ -1706,19 +1721,19 @@ async function handleGenerateSound() {
       await scannerState.ggwaveReady;
     } catch (err) {
       console.error("Audio engine failed to initialise", err);
-      showToast("Audio engine failed to load. Refresh and try again.");
+      showToast(t("runtime.toast_audio_engine_failed"));
       return;
     }
   }
 
   if (!scannerState.ggwave || scannerState.ggwaveInstance === null) {
-    showToast("Audio engine still loading. Try again in a moment.");
+    showToast(t("runtime.toast_audio_engine_loading"));
     return;
   }
 
   const text = dom.encodeInput?.value.trim();
   if (!text) {
-    showToast("Enter text or a link before generating.");
+    showToast(t("runtime.toast_enter_text_before_generate"));
     resetEncodeUI();
     return;
   }
@@ -1732,10 +1747,10 @@ async function handleGenerateSound() {
     updateCurrentBadgeVisibility();
     renderEncodeHistory();
     updateAnalyticsPanel();
-    showToast("Sound link ready — press play to preview.");
+    showToast(t("runtime.toast_sound_ready"));
   } catch (err) {
     console.error("Failed to generate sound", err);
-    showToast("Something went wrong while generating the sound.");
+    showToast(t("runtime.toast_sound_generation_failed"));
     resetEncodeUI();
   }
 }
@@ -1743,22 +1758,22 @@ async function handleGenerateSound() {
 async function handleHistoryAction(entry, intent) {
   if (!entry) return;
   if (!scannerState.user) {
-    showToast("Sign in to use your history playback controls.");
+    showToast(t("runtime.toast_signin_history_controls"));
     openLoginOverlay();
     return;
   }
   const payload = entry.text || entry.url;
   if (!payload) {
-    showToast("This entry has no text to replay.");
+    showToast(t("runtime.toast_entry_no_text"));
     return;
   }
 
   if (intent === "delete") {
-    const confirmDelete = window.confirm("Delete this sound?");
+    const confirmDelete = window.confirm(t("runtime.confirm_delete_sound"));
     if (!confirmDelete) return;
     stopHistoryLoopPlayback({ rerender: false });
     deleteHistoryEntryById(entry.id);
-    showToast("Sound deleted.");
+    showToast(t("runtime.toast_sound_deleted"));
     return;
   }
 
@@ -1773,13 +1788,13 @@ async function handleHistoryAction(entry, intent) {
   const hasAnyPlaybackForEntry = !!(isPlayingThisEntry || isLoopingThisEntry);
   if (intent === "loop" && isLoopingThisEntry) {
     stopHistoryLoopPlayback();
-    showToast("Looping stopped.");
+    showToast(t("runtime.toast_looping_stopped"));
     return;
   }
   if (intent === "play" && hasAnyPlaybackForEntry) {
     stopHistoryPlayPlayback({ rerender: false });
     stopHistoryLoopPlayback({ rerender: true });
-    showToast("Playback stopped.");
+    showToast(t("runtime.toast_playback_stopped"));
     return;
   }
 
@@ -1788,13 +1803,13 @@ async function handleHistoryAction(entry, intent) {
       await scannerState.ggwaveReady;
     } catch (err) {
       console.error("Audio engine failed before history playback", err);
-      showToast("Audio engine failed to load. Refresh and try again.");
+      showToast(t("runtime.toast_audio_engine_failed"));
       return;
     }
   }
 
   if (!scannerState.ggwave || scannerState.ggwaveInstance === null) {
-    showToast("Audio engine still loading. Try again in a moment.");
+    showToast(t("runtime.toast_audio_engine_loading"));
     return;
   }
 
@@ -1807,14 +1822,14 @@ async function handleHistoryAction(entry, intent) {
     getProtocolIdForMode(entry.mode) || getProtocolIdForCurrentMode() || scannerState.ggwave.ProtocolId?.GGWAVE_PROTOCOL_AUDIBLE_FAST;
 
   if (!protocolId) {
-    showToast("Unable to determine playback mode.");
+    showToast(t("runtime.toast_unknown_playback_mode"));
     return;
   }
 
   if (intent === "open") {
     const normalized = normalizeUrl(entry.url || payload);
     if (!normalized) {
-      showToast("No valid URL to open.");
+      showToast(t("runtime.toast_invalid_url"));
       return;
     }
     window.open(normalized, "_blank", "noopener");
@@ -1833,7 +1848,7 @@ async function handleHistoryAction(entry, intent) {
       historyBlob = createWavBlob(profiledFallback || scaledFallback, scannerState.sampleRate);
     } catch (fallbackErr) {
       console.error("Failed to regenerate sound from history", fallbackErr);
-      showToast("Unable to prepare this sound. Try regenerating it manually.");
+      showToast(t("runtime.toast_unable_prepare_sound"));
       return;
     }
   }
@@ -1864,7 +1879,7 @@ async function handleHistoryAction(entry, intent) {
     audio.play().catch((err) => {
       cleanup();
       console.warn("History playback failed", err);
-      showToast("Playback blocked — press play on the audio controls.");
+      showToast(t("runtime.toast_playback_blocked"));
     });
     return;
   } else if (intent === "loop") {
@@ -1878,11 +1893,11 @@ async function handleHistoryAction(entry, intent) {
     scannerState.historyLoopEntryId = entry.id;
     renderEncodeHistory();
     loopAudio.play().then(() => {
-      showToast("Looping playback started.");
+      showToast(t("runtime.toast_looping_started"));
     }).catch((err) => {
       console.warn("History loop playback failed", err);
       stopHistoryLoopPlayback();
-      showToast("Playback blocked — press play on the audio controls.");
+      showToast(t("runtime.toast_playback_blocked"));
     });
     return;
   } else if (intent === "download") {
@@ -1902,7 +1917,7 @@ async function handleHistoryAction(entry, intent) {
 
 function playEncodedAudio() {
   if (!scannerState.encodedBlob || !dom.previewAudio) {
-    showToast("Generate a sound link first.");
+    showToast(t("runtime.toast_generate_first"));
     return;
   }
   if (!dom.previewAudio.paused && !dom.previewAudio.ended) {
@@ -1922,7 +1937,7 @@ function playEncodedAudio() {
     .play()
     .catch((err) => {
       console.warn("Unable to autoplay audio preview", err);
-      showToast("Press play on the audio player to listen.");
+      showToast(t("runtime.toast_press_play_audio"));
     })
     .finally(() => {
       updatePlayButtonState();
@@ -1933,7 +1948,7 @@ function playEncodedAudio() {
 
 function handleDownloadSound() {
   if (!scannerState.encodedBlob) {
-    showToast("Generate a sound before downloading.");
+    showToast(t("runtime.toast_generate_before_download"));
     return;
   }
   const link = document.createElement("a");
@@ -1949,7 +1964,7 @@ function handleOpenGeneratedLink() {
   const fallbackFromInput = resolveGeneratedTargetUrl(dom.encodeInput?.value || "");
   const target = scannerState.encodedTargetUrl || fallbackFromInput;
   if (!target) {
-    showToast("Generate a sound link from a URL first.");
+    showToast(t("runtime.toast_generate_url_first"));
     return;
   }
   scannerState.encodedTargetUrl = target;
@@ -1983,6 +1998,7 @@ function updateWaveAnimation(active) {
 
 function updateInlineScanUI(state) {
   if (pageType !== "index" || !dom.openScan) return;
+  const isUk = document.documentElement.lang === "uk";
 
   const button = dom.openScan;
   const spinner = dom.scanButtonSpinner;
@@ -2002,28 +2018,34 @@ function updateInlineScanUI(state) {
 
   switch (state) {
     case "scanning":
-      setButton(true, "Listening…", true);
+      setButton(true, isUk ? "Сканування…" : "Listening…", true);
       if (status) {
-        status.textContent = "Listening for sound links…";
+        status.textContent = t("runtime.status_listening_links");
       }
       break;
     case "success":
-      setButton(false, "Scan Now", false);
+      setButton(false, isUk ? "Сканувати" : "Scan Now", false);
       if (status) {
-        status.textContent = "Decoded a message successfully. Check the latest scan below.";
+        status.textContent = isUk
+          ? "Повідомлення успішно декодовано. Перевірте останній скан нижче."
+          : "Decoded a message successfully. Check the latest scan below.";
       }
       break;
     case "timeout":
-      setButton(false, "Scan Now", false);
+      setButton(false, isUk ? "Сканувати" : "Scan Now", false);
       if (status) {
-        status.textContent = "No sound link detected. Try scanning again.";
+        status.textContent = isUk
+          ? "Звукове посилання не знайдено. Спробуйте ще раз."
+          : "No sound link detected. Try scanning again.";
       }
       break;
     case "idle":
     default:
-      setButton(false, "Scan Now", false);
+      setButton(false, isUk ? "Сканувати" : "Scan Now", false);
       if (status) {
-        status.textContent = "Tap scan to listen for audio links around you.";
+        status.textContent = isUk
+          ? "Натисніть «Сканувати», щоб слухати звукові посилання поруч."
+          : "Tap scan to listen for audio links around you.";
       }
       break;
   }
@@ -2080,10 +2102,10 @@ function resetCountdown() {
 
 function updateCountdown(value) {
   if (dom.countdown) {
-    dom.countdown.textContent = `${value}s remaining`;
+    dom.countdown.textContent = t("runtime.scan_countdown", { seconds: value });
   }
   if (pageType === "index" && dom.inlineScanStatus && scannerState.activeState === "scanning") {
-    dom.inlineScanStatus.textContent = `Listening for sound links… ${value}s remaining`;
+    dom.inlineScanStatus.textContent = t("runtime.status_listening_with_time", { seconds: value });
   }
 }
 
@@ -2120,7 +2142,7 @@ function openOverlay({ autoStart = false } = {}) {
 
 async function handleStartRecording() {
   if (scannerState.recording) {
-    showToast("Already listening — stop the current scan first.");
+    showToast(t("runtime.toast_scan_already_active"));
     return;
   }
 
@@ -2128,7 +2150,7 @@ async function handleStartRecording() {
     await ensureAudioContext();
   } catch (err) {
     console.error("Unable to initialise audio context", err);
-    showToast("Unable to access audio context. Try again.");
+    showToast(t("runtime.toast_audio_context_unavailable"));
   }
 
   if (scannerState.ggwaveReady) {
@@ -2136,13 +2158,13 @@ async function handleStartRecording() {
       await scannerState.ggwaveReady;
     } catch (err) {
       console.error("Audio engine failed to initialise", err);
-      showToast("Audio engine failed to load. Reload the page and retry.");
+      showToast(t("runtime.toast_reload_audio_engine"));
       return;
     }
   }
 
   if (!scannerState.ggwave || scannerState.ggwaveInstance === null) {
-    showToast("Audio engine still loading. Please wait a moment.");
+    showToast(t("runtime.toast_audio_engine_wait"));
     if (pageType === "index") {
       updateInlineScanUI("idle");
     }
@@ -2163,7 +2185,7 @@ async function handleStartRecording() {
     scannerState.stream = stream;
   } catch (err) {
     console.error("Microphone permission denied", err);
-    showToast("Microphone access is required to scan sound links.");
+    showToast(t("runtime.toast_mic_required"));
     setScanState("timeout");
     if (pageType === "index") {
       updateInlineScanUI("timeout");
@@ -2192,7 +2214,7 @@ async function handleStartRecording() {
         scannerState.audioWorkletRegistered = true;
       } catch (err) {
         console.error("Failed to register audio worklet", err);
-        showToast("Audio worklet registration failed. Try again.");
+        showToast(t("runtime.toast_worklet_failed"));
         URL.revokeObjectURL(workletUrl);
         if (pageType === "index") {
           updateInlineScanUI("idle");
@@ -2245,7 +2267,7 @@ async function handleStartRecording() {
   scannerState.recording = true;
   setScanState("scanning");
   if (dom.statusText) {
-    dom.statusText.textContent = "Listening for sound links...";
+    dom.statusText.textContent = t("runtime.status_listening_links");
   }
 
   scannerState.countdownValue = SCAN_DURATION_SECONDS;
@@ -2289,7 +2311,7 @@ async function handleStopRecording({ skipDecode = false, timeout = false } = {})
 
   if (!merged.length) {
     setScanState("timeout");
-    showToast("No audio captured — try again.");
+    showToast(t("runtime.toast_no_audio_captured"));
     return;
   }
 
@@ -2327,14 +2349,14 @@ async function handleStopRecording({ skipDecode = false, timeout = false } = {})
       handleDecodingSuccess(displayText);
     } else {
       setScanState("timeout");
-      updateLastResultDisplays("No clear transmission detected.");
-      showToast("No readable message found. Try again.");
+      updateLastResultDisplays(t("runtime.status_no_clear_transmission"));
+      showToast(t("runtime.toast_no_readable_message"));
     }
   } catch (err) {
     console.error("Failed to decode sound", err);
     setScanState("timeout");
-    updateLastResultDisplays("Decoding failed.");
-    showToast("Decoding failed. Try again.");
+    updateLastResultDisplays(t("runtime.status_decoding_failed"));
+    showToast(t("runtime.toast_decoding_failed"));
   }
 }
 
@@ -2425,28 +2447,28 @@ function wireEvents() {
     const email = dom.loginEmail?.value.trim().toLowerCase();
     const password = dom.loginPassword?.value.trim();
     if (!email || !password) {
-      setAuthError("Enter email and password to continue.");
+      setAuthError(t("runtime.auth_enter_credentials"));
       return;
     }
     const submitButton = event.submitter || dom.loginForm.querySelector('button[type="submit"]');
-    setButtonLoadingState(submitButton, true, "Signing in…");
+    setButtonLoadingState(submitButton, true, t("runtime.auth_signing_in"));
     try {
       const user = await performLogin(email, password);
       if (!user) {
-        throw new Error("Invalid email or password.");
+        throw new Error(t("runtime.auth_invalid_credentials"));
       }
       cachePlainPasswordForSession(user.email, password);
       scannerState.user = user;
       applyUserState();
       void refreshBillingStatus();
       closeLoginOverlay();
-      showToast(`Signed in as ${user.email}`);
+      showToast(t("runtime.toast_signed_in_as", { email: user.email }));
       if (pageType === "index") {
         window.location.href = "./admin.html";
       }
     } catch (err) {
       console.error("Login failed", err);
-      setAuthError(err.body?.error || err.message || "Unable to sign in. Try again.");
+      setAuthError(err.body?.error || err.message || t("runtime.auth_login_failed"));
     } finally {
       setButtonLoadingState(submitButton, false);
     }
@@ -2459,36 +2481,36 @@ function wireEvents() {
     const password = dom.registerPassword?.value.trim();
     const confirm = dom.registerConfirmPassword?.value.trim();
     if (!email || !password || !confirm) {
-      setAuthError("Please complete all fields to continue.");
+      setAuthError(t("runtime.auth_fill_all_fields"));
       return;
     }
     if (password !== confirm) {
-      setAuthError("Passwords do not match. Try again.");
+      setAuthError(t("runtime.auth_password_mismatch"));
       return;
     }
     if (password.length < 6) {
-      setAuthError("Password must be at least 6 characters.");
+      setAuthError(t("runtime.auth_password_short"));
       return;
     }
     const submitButton = event.submitter || dom.registerForm.querySelector('button[type="submit"]');
-    setButtonLoadingState(submitButton, true, "Creating account…");
+    setButtonLoadingState(submitButton, true, t("runtime.auth_creating_account"));
     try {
       const user = await performRegister(email, password);
       if (!user) {
-        throw new Error("Registration failed.");
+        throw new Error(t("runtime.auth_registration_failed"));
       }
       cachePlainPasswordForSession(user.email, password);
       scannerState.user = user;
       applyUserState();
       void refreshBillingStatus();
       closeLoginOverlay();
-      showToast(`Welcome, ${user.email}!`);
+      showToast(t("runtime.toast_welcome_user", { email: user.email }));
       if (pageType === "index") {
         window.location.href = "./admin.html";
       }
     } catch (err) {
       console.error("Registration failed", err);
-      setAuthError(err.body?.error || err.message || "Unable to create account. Try again.");
+      setAuthError(err.body?.error || err.message || t("runtime.auth_registration_failed"));
     } finally {
       setButtonLoadingState(submitButton, false);
     }
@@ -2496,6 +2518,15 @@ function wireEvents() {
 
   dom.headerLogout?.addEventListener("click", () => {
     void handleUserLogout();
+  });
+  dom.langSwitchButtons?.forEach((button) => {
+    button.addEventListener("click", () => {
+      setLanguage(button.dataset.langSwitch || "en");
+      applyPageTranslations(pageType);
+      applyUserState();
+      updateAnalyticsPanel();
+      updateInlineScanUI(scannerState.activeState || "idle");
+    });
   });
   dom.headerSettings?.addEventListener("click", () => {
     openSettingsPanel();
@@ -2610,6 +2641,8 @@ function wireEvents() {
 
 async function initialiseScanner() {
   cacheDom();
+  initLanguage();
+  applyPageTranslations(pageType);
   updatePlanUI();
   setAuthMode(activeAuthMode);
   wireEvents();
@@ -2631,10 +2664,10 @@ async function initialiseScanner() {
   try {
     await rebuildGGWave();
     restoreLastGeneratedSound();
-    showToast("Audio engine ready — start scanning anytime.");
+    showToast(t("runtime.toast_audio_ready"));
   } catch (err) {
     console.error("Failed to initialise GGWave", err);
-    showToast("Failed to load audio engine. Refresh the page to retry.");
+    showToast(t("runtime.toast_audio_load_failed"));
   }
 }
 

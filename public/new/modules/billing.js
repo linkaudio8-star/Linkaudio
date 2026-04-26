@@ -1,15 +1,17 @@
+import { getCurrentLanguage, t } from "./i18n.js";
+
 export function getPlanDisplay(plan) {
   const normalized = plan === "pro" ? "pro" : "free";
-  return normalized === "pro" ? "Pro Plan" : "Free Plan";
+  return normalized === "pro" ? t("common.plan_pro") : t("common.plan_free");
 }
 
 export function formatNextPayment(isoString) {
-  if (!isoString) return "Included in current period";
+  if (!isoString) return t("runtime.billing_included_period");
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) {
-    return "Included in current period";
+    return t("runtime.billing_included_period");
   }
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(getCurrentLanguage() === "uk" ? "uk-UA" : undefined, {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -35,7 +37,7 @@ export function updatePlanUI(scannerState, dom) {
       button.dataset.originalText = button.textContent || "";
     }
     if (!button.dataset.proText) {
-      button.dataset.proText = "Pro plan active";
+      button.dataset.proText = t("runtime.billing_pro_active");
     }
     button.disabled = isPro;
     if (isPro) {
@@ -50,10 +52,10 @@ export function updatePlanUI(scannerState, dom) {
     if (isPro) {
       const nextPayment = scannerState.billing?.subscriptionPeriodEnd
         ? formatNextPayment(scannerState.billing.subscriptionPeriodEnd)
-        : "Included in current period";
+        : t("runtime.billing_included_period");
       dom.nextPaymentLabel.textContent = nextPayment;
     } else {
-      dom.nextPaymentLabel.textContent = "Upgrade to unlock";
+      dom.nextPaymentLabel.textContent = t("runtime.billing_upgrade_unlock");
     }
   }
 }
@@ -141,11 +143,11 @@ export async function confirmCheckoutSession({
         subscriptionStatus: result.stripeSubscriptionStatus || null,
         subscriptionPeriodEnd: result.stripeSubscriptionPeriodEnd || null,
       });
-      showToast("Pro subscription activated.");
+      showToast(t("runtime.billing_subscription_activated"));
     }
   } catch (err) {
     console.error("Failed to confirm checkout session", err);
-    showToast(err.body?.error || err.message || "Unable to confirm subscription.");
+    showToast(err.body?.error || err.message || t("runtime.billing_confirm_failed"));
     await refreshBillingStatus(scannerState, dom, apiRequest);
   }
 }
@@ -160,10 +162,10 @@ export async function startPlanCheckout({
 }) {
   const targetPlan = plan || "pro";
   if (scannerState.billing?.plan === "pro") {
-    showToast("You're already on the Pro plan.");
+    showToast(t("runtime.billing_already_pro"));
     return;
   }
-  setButtonLoadingState(button, true, "Redirecting…");
+  setButtonLoadingState(button, true, t("runtime.billing_redirecting"));
   try {
     const response = await apiRequest(`/api/checkout/${targetPlan}`, {
       method: "POST",
@@ -176,10 +178,10 @@ export async function startPlanCheckout({
       window.location.href = response.url;
       return;
     }
-    throw new Error("Checkout link unavailable.");
+    throw new Error(t("runtime.billing_checkout_link_unavailable"));
   } catch (err) {
     console.error("Checkout failed", err);
-    showToast(err.body?.error || err.message || "Unable to start checkout.");
+    showToast(err.body?.error || err.message || t("runtime.billing_start_checkout_failed"));
   } finally {
     setButtonLoadingState(button, false);
   }
