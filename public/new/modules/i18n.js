@@ -370,7 +370,7 @@ const STATIC_ADMIN_TRANSLATIONS = [
   { selector: "#checkout-cancel-dismiss", key: "common.dismiss" },
   { selector: "#creation p.text-xs", en: "Create Sound Link", uk: "Створити звукове посилання" },
   { selector: "#creation h1", en: "Encode any URL into an ultrasound signature", uk: "Кодуйте будь-який URL в ультразвуковий сигнал" },
-  { selector: "#creation .inline-flex.items-center.gap-2.rounded-full", en: "Ultrasound · Silent optimized", uk: "Ультразвук · Тихо оптимізовано" },
+  { selector: "#silent-mode-badge", en: "Ultrasound · Silent optimized", uk: "Ультразвук · Тихо оптимізовано" },
   { selector: "label[for='new-encode-input']", en: "URL", uk: "URL" },
   { selector: "#new-encode-input", attr: "placeholder", en: "Paste a URL...", uk: "Вставте URL..." },
   { selector: "#new-generate-sound-label", en: "Generate Sound Link", uk: "Згенерувати звукове посилання" },
@@ -480,9 +480,16 @@ function updateLanguageButtons() {
 }
 
 export function initLanguage() {
-  const fromStorage = resolveLanguage(localStorage.getItem(LANGUAGE_STORAGE_KEY));
-  const fromNavigator = resolveLanguage(navigator.language || "en");
-  currentLanguage = fromStorage || fromNavigator || "en";
+  const storedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  if (storedLanguage) {
+    currentLanguage = resolveLanguage(storedLanguage);
+  } else {
+    const browserLanguage =
+      (Array.isArray(navigator.languages) && navigator.languages.length
+        ? navigator.languages[0]
+        : navigator.language) || "en";
+    currentLanguage = resolveLanguage(browserLanguage);
+  }
   document.documentElement.lang = currentLanguage;
   updateLanguageButtons();
   return currentLanguage;
