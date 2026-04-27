@@ -111,37 +111,43 @@ function renderTrendChart(dom, points, t) {
     return;
   }
 
+  const totalPoints = points.length;
   const maxValue = points.reduce((acc, point) => Math.max(acc, toSafeNumber(point.scans)), 0);
   const denominator = maxValue > 0 ? maxValue : 1;
 
-  points.forEach((point) => {
+  const shouldShowLabel = (index) => {
+    if (totalPoints <= 8) return true;
+    if (index === 0 || index === totalPoints - 1) return true;
+    if (totalPoints <= 24) return index % 4 === 0;
+    if (totalPoints <= 31) return index % 5 === 0;
+    return index % Math.ceil(totalPoints / 6) === 0;
+  };
+
+  points.forEach((point, index) => {
     const scans = toSafeNumber(point.scans);
     const bar = document.createElement("div");
-    bar.className = "flex min-w-0 flex-1 flex-col items-center justify-end gap-1";
+    bar.className = "group flex min-w-0 flex-1 flex-col items-center justify-end gap-1";
+    bar.title = `${formatDateTimeShort(point.bucketStart)} — ${scans}`;
 
     const stem = document.createElement("div");
-    stem.className = "w-full rounded-sm bg-gradient-to-t from-[#55d7ff] to-[#a58bff]";
-    stem.style.height = `${Math.max(4, Math.round((scans / denominator) * 100))}%`;
-    stem.title = `${formatDateTimeShort(point.bucketStart)} — ${scans}`;
+    stem.className = "w-full rounded-sm bg-gradient-to-t from-[#55d7ff] to-[#a58bff] opacity-90 transition-opacity duration-200 group-hover:opacity-100";
+    stem.style.height = `${Math.max(6, Math.round((scans / denominator) * 96))}%`;
 
     const label = document.createElement("span");
-    label.className = "truncate text-[10px] text-slate-400";
+    label.className = "h-3 truncate text-[10px] leading-3 text-slate-400";
     const date = new Date(point.bucketStart);
     if (Number.isNaN(date.getTime())) {
       label.textContent = "";
+    } else if (!shouldShowLabel(index)) {
+      label.textContent = "";
     } else {
       label.textContent =
-        points.length > 24
+        totalPoints > 24
           ? `${date.getUTCMonth() + 1}/${date.getUTCDate()}`
           : `${date.getUTCHours().toString().padStart(2, "0")}:00`;
     }
 
-    const value = document.createElement("span");
-    value.className = "text-[10px] font-semibold text-slate-500";
-    value.textContent = String(scans);
-
     bar.appendChild(stem);
-    bar.appendChild(value);
     bar.appendChild(label);
     dom.analyticsTrendChart.appendChild(bar);
   });
@@ -160,19 +166,19 @@ function renderTopLinks(dom, links, t) {
     row.className = "border-b border-slate-100 last:border-b-0";
 
     const linkCell = document.createElement("td");
-    linkCell.className = "py-2 pr-2 align-top";
+    linkCell.className = "max-w-[220px] py-2.5 pr-2 align-top break-all text-slate-700";
     linkCell.textContent = escapeCellText(link.targetUrl || link.payloadText || t("runtime.history_untitled_link"));
 
     const scansCell = document.createElement("td");
-    scansCell.className = "py-2 pr-2 align-top font-semibold text-slate-700";
+    scansCell.className = "py-2.5 pr-2 align-top font-semibold text-slate-700";
     scansCell.textContent = String(toSafeNumber(link.scansInRange));
 
     const lastScanCell = document.createElement("td");
-    lastScanCell.className = "py-2 pr-2 align-top";
+    lastScanCell.className = "py-2.5 pr-2 align-top whitespace-nowrap";
     lastScanCell.textContent = formatDateTimeShort(link.lastScanAt) || t("runtime.history_no_scans");
 
     const openRateCell = document.createElement("td");
-    openRateCell.className = "py-2 align-top";
+    openRateCell.className = "py-2.5 align-top whitespace-nowrap";
     openRateCell.textContent =
       link.openRate === null || link.openRate === undefined
         ? t("runtime.analytics_not_available")
