@@ -12,6 +12,14 @@
     />
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
+      if (window.location.hash.includes("figmacapture=")) {
+        const script = document.createElement("script");
+        script.src = "https://mcp.figma.com/mcp/html-to-design/capture.js";
+        script.async = true;
+        document.head.appendChild(script);
+      }
+    </script>
+    <script>
       tailwind.config = {
         theme: {
           extend: {

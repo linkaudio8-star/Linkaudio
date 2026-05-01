@@ -89,6 +89,11 @@ const scannerState = {
   autoDecodeSampleCount: 0,
   autoDecodeActive: false,
   autoDecodeInProgress: false,
+  scanSessionOrdinal: 0,
+  scanSessionId: null,
+  scanSessionStartedAt: null,
+  scanDecodeCompleted: false,
+  scanStopReason: null,
   historySyncTimer: null,
   analytics: null,
 };
@@ -107,6 +112,12 @@ const LAST_ENCODE_STORAGE_KEY = "audiolink-last-encode";
 const ENCODE_DRAFT_STORAGE_KEY = "audiolink-encode-draft";
 const DEV_AUDIO_PROFILE_QUERY_KEY = "__al_dev_audio";
 const DEV_AUDIO_PROFILE_LEGACY = "legacy";
+const DEV_SCAN_DIAG_QUERY_KEY = "__al_diag";
+const DEV_DECODE_MODE_QUERY_KEY = "__al_decode_mode";
+const DEV_SCAN_SETTLE_MS_QUERY_KEY = "__al_scan_settle_ms";
+const DEV_DECODE_MODE_CURRENT = "current";
+const DEV_DECODE_MODE_SCRATCH = "scratch";
+const DEV_DECODE_MODE_PERSISTENT = "persistent";
 const DEFAULT_ENCODE_VOLUME = 10;
 const SILENT_PROFILE_ENCODE_VOLUME = 4;
 const SILENT_PROFILE_OUTPUT_GAIN = 0.55;
@@ -125,6 +136,50 @@ function isLegacyAudioProfileDebugEnabled() {
 }
 
 const debugLegacyAudioProfileEnabled = isLegacyAudioProfileDebugEnabled();
+
+function parseDevScanDiagnosticsConfig() {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const enabled = params.get(DEV_SCAN_DIAG_QUERY_KEY) === "1";
+    const decodeModeRaw = String(params.get(DEV_DECODE_MODE_QUERY_KEY) || "").trim().toLowerCase();
+    const decodeMode =
+      decodeModeRaw === DEV_DECODE_MODE_SCRATCH || decodeModeRaw === DEV_DECODE_MODE_PERSISTENT
+        ? decodeModeRaw
+        : DEV_DECODE_MODE_CURRENT;
+    const settleMsRaw = Number(params.get(DEV_SCAN_SETTLE_MS_QUERY_KEY));
+    const settleMs =
+      Number.isFinite(settleMsRaw) && settleMsRaw >= 0 ? Math.min(5000, Math.round(settleMsRaw)) : 0;
+    return { enabled, decodeMode, settleMs };
+  } catch (err) {
+    return { enabled: false, decodeMode: DEV_DECODE_MODE_CURRENT, settleMs: 0 };
+  }
+}
+
+const devScanDiagnosticsConfig = parseDevScanDiagnosticsConfig();
+
+function nowPerfMs() {
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return performance.now();
+  }
+  return Date.now();
+}
+
+function logScanDiag(event, details = {}) {
+  if (!devScanDiagnosticsConfig.enabled) return;
+  const payload = {
+    event,
+    ts: new Date().toISOString(),
+    ...details,
+  };
+  console.log("[AudioLinkDiag]", payload);
+}
+
+function waitMs(delay) {
+  if (!delay || delay <= 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, delay);
+  });
+}
 
 const recorderWorkletSource = `class GGWaveRecorder extends AudioWorkletProcessor {
   process(inputs) {
@@ -458,19 +513,30 @@ async function reportScanToServer(displayText) {
 }
 
 function finishAutoDecode(displayText) {
+  const sessionId = scannerState.scanSessionId || null;
+  scannerState.scanDecodeCompleted = true;
+  scannerState.scanStopReason = "auto-success";
+  scannerState.recording = false;
   scannerState.autoDecodeActive = false;
   scannerState.autoDecodeSampleCount = 0;
   scannerState.autoDecodeInProgress = false;
   resetCountdown();
   cleanupRecordingNodes();
   stopStream();
-  scannerState.recording = false;
   scannerState.recordedChunks = [];
+  logScanDiag("scan-session-stop", {
+    sessionId,
+    scanOrdinal: scannerState.scanSessionOrdinal || 0,
+    stopReason: "auto-success",
+    durationMs: scannerState.scanSessionStartedAt ? Date.now() - scannerState.scanSessionStartedAt : null,
+  });
   handleDecodingSuccess(displayText);
 }
 
 function decodeBufferWithScratch(int16Data) {
-  if (!scannerState.ggwave) return "";
+  if (!scannerState.ggwave) {
+    return { text: "", decodedLength: 0, trimmedLength: 0 };
+  }
   try {
     const module = scannerState.ggwave;
     const params = module.getDefaultParameters();
@@ -481,20 +547,26 @@ function decodeBufferWithScratch(int16Data) {
     params.operatingMode = module.GGWAVE_OPERATING_MODE_RX;
     const instance = module.init(params);
     if (instance === undefined || instance === null) {
-      return "";
+      return { text: "", decodedLength: 0, trimmedLength: 0 };
     }
     try {
       const byteView = new Int8Array(int16Data.buffer.slice(0));
       const decoded = module.decode(instance, byteView);
       if (decoded && decoded.length) {
+        const decodedLength = decoded.length;
         let end = decoded.length;
         while (end > 0 && decoded[end - 1] === 0) {
           end -= 1;
         }
         if (end > 0) {
           const trimmed = decoded.subarray(0, end);
-          return textDecoder.decode(trimmed).trim();
+          return {
+            text: textDecoder.decode(trimmed).trim(),
+            decodedLength,
+            trimmedLength: trimmed.length,
+          };
         }
+        return { text: "", decodedLength, trimmedLength: 0 };
       }
     } finally {
       try {
@@ -506,16 +578,99 @@ function decodeBufferWithScratch(int16Data) {
   } catch (err) {
     console.warn("Scratch decode failed", err);
   }
-  return "";
+  return { text: "", decodedLength: 0, trimmedLength: 0 };
+}
+
+function decodeBufferWithPersistent(int16Data) {
+  if (!scannerState.ggwave || scannerState.ggwaveInstance === null) {
+    return { text: "", decodedLength: 0, trimmedLength: 0 };
+  }
+  try {
+    const byteView = new Int8Array(int16Data.buffer.slice(0));
+    const decoded = scannerState.ggwave.decode(scannerState.ggwaveInstance, byteView);
+    if (decoded && decoded.length) {
+      const decodedLength = decoded.length;
+      let end = decoded.length;
+      while (end > 0 && decoded[end - 1] === 0) {
+        end -= 1;
+      }
+      if (end > 0) {
+        const trimmed = decoded.subarray(0, end);
+        return {
+          text: textDecoder.decode(trimmed).trim(),
+          decodedLength,
+          trimmedLength: trimmed.length,
+        };
+      }
+      return { text: "", decodedLength, trimmedLength: 0 };
+    }
+  } catch (err) {
+    console.warn("Persistent decode failed", err);
+  }
+  return { text: "", decodedLength: 0, trimmedLength: 0 };
+}
+
+function decodeWithConfiguredMode(int16Data, source) {
+  const mode =
+    devScanDiagnosticsConfig.decodeMode === DEV_DECODE_MODE_SCRATCH ||
+    devScanDiagnosticsConfig.decodeMode === DEV_DECODE_MODE_PERSISTENT
+      ? devScanDiagnosticsConfig.decodeMode
+      : source === "auto"
+        ? DEV_DECODE_MODE_SCRATCH
+        : DEV_DECODE_MODE_PERSISTENT;
+
+  const startedAt = nowPerfMs();
+  const decodeResult =
+    mode === DEV_DECODE_MODE_SCRATCH
+      ? decodeBufferWithScratch(int16Data)
+      : decodeBufferWithPersistent(int16Data);
+  const decodeMs = Math.round((nowPerfMs() - startedAt) * 1000) / 1000;
+
+  logScanDiag("decode-attempt", {
+    sessionId: scannerState.scanSessionId || null,
+    scanOrdinal: scannerState.scanSessionOrdinal || 0,
+    source,
+    configuredMode: devScanDiagnosticsConfig.decodeMode,
+    modeUsed: mode,
+    sampleCount: int16Data.length,
+    decodeMs,
+    decodedLength: decodeResult.decodedLength,
+    trimmedLength: decodeResult.trimmedLength,
+    textLength: decodeResult.text.length,
+    success: !!decodeResult.text,
+  });
+
+  return { text: decodeResult.text, mode, decodeMs, decodedLength: decodeResult.decodedLength, trimmedLength: decodeResult.trimmedLength };
 }
 
 function maybeAutoDecode() {
   if (!scannerState.recording || !scannerState.autoDecodeActive) return;
-  if (scannerState.autoDecodeInProgress) return;
+  if (scannerState.autoDecodeInProgress) {
+    logScanDiag("auto-decode-skipped", {
+      sessionId: scannerState.scanSessionId || null,
+      reason: "already-in-progress",
+    });
+    return;
+  }
+  if (scannerState.scanDecodeCompleted) {
+    logScanDiag("auto-decode-skipped", {
+      sessionId: scannerState.scanSessionId || null,
+      reason: "already-completed",
+    });
+    return;
+  }
   const threshold = Math.max(1024, Math.round(scannerState.sampleRate * 0.8));
   if (scannerState.autoDecodeSampleCount < threshold) {
     return;
   }
+  const autoStartedAt = nowPerfMs();
+  logScanDiag("auto-decode-start", {
+    sessionId: scannerState.scanSessionId || null,
+    scanOrdinal: scannerState.scanSessionOrdinal || 0,
+    threshold,
+    sampleCountAccumulated: scannerState.autoDecodeSampleCount,
+    chunkCount: scannerState.recordedChunks.length,
+  });
   scannerState.autoDecodeInProgress = true;
   try {
     const merged = mergeInt16Chunks(scannerState.recordedChunks);
@@ -534,17 +689,39 @@ function maybeAutoDecode() {
       for (let i = 0; i < merged.length; i += 1) {
         merged[i] = Math.max(-32768, Math.min(32767, Math.round(merged[i] * scale)));
       }
+      logScanDiag("auto-decode-amplification", {
+        sessionId: scannerState.scanSessionId || null,
+        maxAmplitude,
+        scale,
+      });
+    } else {
+      logScanDiag("auto-decode-amplification", {
+        sessionId: scannerState.scanSessionId || null,
+        maxAmplitude,
+        scale: 1,
+      });
     }
-    const displayText = decodeBufferWithScratch(merged);
+    const decodeResult = decodeWithConfiguredMode(merged, "auto");
+    const displayText = decodeResult.text;
     if (displayText) {
       finishAutoDecode(displayText);
       return;
     }
   } catch (err) {
     console.warn("Auto decode attempt failed", err);
+    logScanDiag("auto-decode-error", {
+      sessionId: scannerState.scanSessionId || null,
+      error: String(err?.message || err || "unknown"),
+    });
   } finally {
     scannerState.autoDecodeSampleCount = 0;
     scannerState.autoDecodeInProgress = false;
+    logScanDiag("auto-decode-finish", {
+      sessionId: scannerState.scanSessionId || null,
+      scanOrdinal: scannerState.scanSessionOrdinal || 0,
+      elapsedMs: Math.round((nowPerfMs() - autoStartedAt) * 1000) / 1000,
+      decodeCompleted: !!scannerState.scanDecodeCompleted,
+    });
   }
 }
 
@@ -882,6 +1059,9 @@ function cleanupRecordingNodes() {
   scannerState.autoDecodeActive = false;
   scannerState.autoDecodeSampleCount = 0;
   scannerState.autoDecodeInProgress = false;
+  logScanDiag("recording-nodes-cleanup", {
+    sessionId: scannerState.scanSessionId || null,
+  });
 }
 
 function stopStream() {
@@ -1961,7 +2141,7 @@ function updateInlineScanUI(state) {
       }
       break;
     case "success":
-      setButton(false, isUk ? "Сканувати" : "Scan Now", false);
+      setButton(false, isUk ? "Сканувати звук" : "Scan Now", false);
       if (status) {
         status.textContent = isUk
           ? "Повідомлення успішно декодовано. Перевірте останній скан нижче."
@@ -1969,7 +2149,7 @@ function updateInlineScanUI(state) {
       }
       break;
     case "timeout":
-      setButton(false, isUk ? "Сканувати" : "Scan Now", false);
+      setButton(false, isUk ? "Сканувати звук" : "Scan Now", false);
       if (status) {
         status.textContent = isUk
           ? "Звукове посилання не знайдено. Спробуйте ще раз."
@@ -1978,10 +2158,10 @@ function updateInlineScanUI(state) {
       break;
     case "idle":
     default:
-      setButton(false, isUk ? "Сканувати" : "Scan Now", false);
+      setButton(false, isUk ? "Сканувати звук" : "Scan Now", false);
       if (status) {
         status.textContent = isUk
-          ? "Натисніть «Сканувати», щоб слухати звукові посилання поруч."
+          ? "Натисніть «Сканувати звук», щоб слухати аудіопосилання поруч."
           : "Tap scan to listen for audio links around you.";
       }
       break;
@@ -2109,6 +2289,21 @@ async function handleStartRecording() {
   }
 
   const audioContext = scannerState.audioContext || (await ensureAudioContext());
+  scannerState.scanSessionOrdinal = (scannerState.scanSessionOrdinal || 0) + 1;
+  scannerState.scanSessionId = `${Date.now()}-${scannerState.scanSessionOrdinal}`;
+  scannerState.scanSessionStartedAt = Date.now();
+  scannerState.scanDecodeCompleted = false;
+  scannerState.scanStopReason = null;
+  logScanDiag("scan-session-start", {
+    sessionId: scannerState.scanSessionId,
+    scanOrdinal: scannerState.scanSessionOrdinal,
+    sessionLabel: scannerState.scanSessionOrdinal === 1 ? "first-scan" : "follow-up-scan",
+    decodeMode: devScanDiagnosticsConfig.decodeMode,
+    settleMs: devScanDiagnosticsConfig.settleMs,
+    audioContextState: audioContext.state,
+    sampleRate: audioContext.sampleRate,
+    ggwaveSampleRate: scannerState.sampleRate,
+  });
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -2131,6 +2326,12 @@ async function handleStartRecording() {
   }
 
   await audioContext.resume();
+  logScanDiag("audio-context-resume", {
+    sessionId: scannerState.scanSessionId || null,
+    audioContextState: audioContext.state,
+    sampleRate: audioContext.sampleRate,
+  });
+  await waitMs(devScanDiagnosticsConfig.settleMs);
 
   scannerState.recordedChunks = [];
   scannerState.autoDecodeActive = true;
@@ -2180,6 +2381,10 @@ async function handleStartRecording() {
     silentGain.connect(audioContext.destination);
 
     scannerState.processorNode = recorderNode;
+    logScanDiag("recording-nodes-created", {
+      sessionId: scannerState.scanSessionId || null,
+      processorType: "audio-worklet",
+    });
   } else {
     console.warn("Falling back to ScriptProcessorNode");
     const processorNode = audioContext.createScriptProcessor(2048, 1, 1);
@@ -2199,6 +2404,10 @@ async function handleStartRecording() {
     processorNode.connect(silentGain);
     silentGain.connect(audioContext.destination);
     scannerState.processorNode = processorNode;
+    logScanDiag("recording-nodes-created", {
+      sessionId: scannerState.scanSessionId || null,
+      processorType: "script-processor",
+    });
   }
 
   scannerState.recording = true;
@@ -2229,24 +2438,58 @@ async function handleStartRecording() {
 }
 
 async function handleStopRecording({ skipDecode = false, timeout = false } = {}) {
+  const stopStart = nowPerfMs();
   if (!scannerState.recording) {
+    logScanDiag("scan-stop-ignored", {
+      sessionId: scannerState.scanSessionId || null,
+      reason: "not-recording",
+      skipDecode,
+      timeout,
+    });
     return;
   }
 
+  scannerState.scanStopReason = timeout ? "timeout" : skipDecode ? "manual-stop-no-decode" : "manual-stop";
   scannerState.recording = false;
   resetCountdown();
   cleanupRecordingNodes();
   stopStream();
 
   if (skipDecode) {
+    scannerState.scanDecodeCompleted = true;
+    logScanDiag("scan-session-stop", {
+      sessionId: scannerState.scanSessionId || null,
+      scanOrdinal: scannerState.scanSessionOrdinal || 0,
+      stopReason: scannerState.scanStopReason,
+      durationMs: scannerState.scanSessionStartedAt ? Date.now() - scannerState.scanSessionStartedAt : null,
+      decodeSource: "none",
+      success: false,
+    });
     setScanState(timeout ? "timeout" : "idle");
     return;
   }
 
+  const chunkCountBeforeMerge = scannerState.recordedChunks.length;
   const merged = mergeInt16Chunks(scannerState.recordedChunks);
   scannerState.recordedChunks = [];
+  logScanDiag("scan-stop-buffer", {
+    sessionId: scannerState.scanSessionId || null,
+    scanOrdinal: scannerState.scanSessionOrdinal || 0,
+    chunkCount: chunkCountBeforeMerge,
+    sampleCount: merged.length,
+  });
 
   if (!merged.length) {
+    scannerState.scanDecodeCompleted = true;
+    logScanDiag("scan-session-stop", {
+      sessionId: scannerState.scanSessionId || null,
+      scanOrdinal: scannerState.scanSessionOrdinal || 0,
+      stopReason: scannerState.scanStopReason,
+      durationMs: scannerState.scanSessionStartedAt ? Date.now() - scannerState.scanSessionStartedAt : null,
+      decodeSource: "manual",
+      success: false,
+      failReason: "empty-buffer",
+    });
     setScanState("timeout");
     showToast(t("runtime.toast_no_audio_captured"));
     return;
@@ -2266,21 +2509,37 @@ async function handleStopRecording({ skipDecode = false, timeout = false } = {})
       const amplified = Math.max(-32768, Math.min(32767, Math.round(merged[i] * scale)));
       merged[i] = amplified;
     }
+    logScanDiag("manual-decode-amplification", {
+      sessionId: scannerState.scanSessionId || null,
+      maxAmplitude,
+      scale,
+    });
+  } else {
+    logScanDiag("manual-decode-amplification", {
+      sessionId: scannerState.scanSessionId || null,
+      maxAmplitude,
+      scale: 1,
+    });
   }
 
   try {
-    const byteView = new Int8Array(merged.buffer);
-    const decoded = scannerState.ggwave.decode(scannerState.ggwaveInstance, byteView);
-    let displayText = "";
-
-    if (decoded && decoded.length) {
-      let end = decoded.length;
-      while (end > 0 && decoded[end - 1] === 0) {
-        end -= 1;
-      }
-      const trimmed = decoded.subarray(0, end);
-      displayText = trimmed.length ? textDecoder.decode(trimmed) : "";
-    }
+    const decodeResult = decodeWithConfiguredMode(merged, "manual-stop");
+    const displayText = decodeResult.text;
+    scannerState.scanDecodeCompleted = true;
+    logScanDiag("scan-session-stop", {
+      sessionId: scannerState.scanSessionId || null,
+      scanOrdinal: scannerState.scanSessionOrdinal || 0,
+      stopReason: scannerState.scanStopReason,
+      durationMs: scannerState.scanSessionStartedAt ? Date.now() - scannerState.scanSessionStartedAt : null,
+      decodeSource: "manual",
+      success: !!displayText,
+      modeUsed: decodeResult.mode,
+      decodeMs: decodeResult.decodeMs,
+      decodedLength: decodeResult.decodedLength,
+      trimmedLength: decodeResult.trimmedLength,
+      maxAmplitude,
+      stopElapsedMs: Math.round((nowPerfMs() - stopStart) * 1000) / 1000,
+    });
 
     if (displayText) {
       handleDecodingSuccess(displayText);
@@ -2290,6 +2549,18 @@ async function handleStopRecording({ skipDecode = false, timeout = false } = {})
       showToast(t("runtime.toast_no_readable_message"));
     }
   } catch (err) {
+    scannerState.scanDecodeCompleted = true;
+    logScanDiag("scan-session-stop", {
+      sessionId: scannerState.scanSessionId || null,
+      scanOrdinal: scannerState.scanSessionOrdinal || 0,
+      stopReason: scannerState.scanStopReason,
+      durationMs: scannerState.scanSessionStartedAt ? Date.now() - scannerState.scanSessionStartedAt : null,
+      decodeSource: "manual",
+      success: false,
+      failReason: "decode-exception",
+      error: String(err?.message || err || "unknown"),
+      stopElapsedMs: Math.round((nowPerfMs() - stopStart) * 1000) / 1000,
+    });
     console.error("Failed to decode sound", err);
     setScanState("timeout");
     updateLastResultDisplays(t("runtime.status_decoding_failed"));
