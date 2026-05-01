@@ -95,6 +95,8 @@ const scannerState = {
   scanDecodeCompleted: false,
   scanStopReason: null,
   historySyncTimer: null,
+  adminIdleTimer: null,
+  lastAdminActivityAt: 0,
   analytics: null,
 };
 
@@ -125,6 +127,9 @@ const SILENT_PROFILE_HIGHPASS_CUTOFF_HZ = 17000;
 const SILENT_PROFILE_HIGHPASS_Q = 0.707;
 const SILENT_PROFILE_EDGE_FADE_MS = 8;
 const HISTORY_SYNC_INTERVAL_MS = 15000;
+const ADMIN_IDLE_TIMEOUT_MS = 60 * 60 * 1000;
+const ADMIN_IDLE_ACTIVITY_THROTTLE_MS = 15000;
+const ADMIN_IDLE_ACTIVITY_STORAGE_KEY = "audiolink-admin-last-activity";
 
 function isLegacyAudioProfileDebugEnabled() {
   try {
@@ -273,6 +278,76 @@ function clearCachedPlainPassword(email) {
   } catch (err) {
     console.warn("Failed to clear cached plain password", err);
   }
+}
+
+function clearAdminIdleLogoutTimer() {
+  if (scannerState.adminIdleTimer) {
+    window.clearTimeout(scannerState.adminIdleTimer);
+    scannerState.adminIdleTimer = null;
+  }
+}
+
+function stopAdminIdleTracking() {
+  clearAdminIdleLogoutTimer();
+  scannerState.lastAdminActivityAt = 0;
+}
+
+function scheduleAdminIdleLogout() {
+  clearAdminIdleLogoutTimer();
+  if (pageType !== "admin" || !scannerState.user) return;
+
+  const lastActivityAt = Number(scannerState.lastAdminActivityAt) || Date.now();
+  const remainingMs = ADMIN_IDLE_TIMEOUT_MS - (Date.now() - lastActivityAt);
+  if (remainingMs <= 0) {
+    void handleUserLogout({ dueToInactivity: true });
+    return;
+  }
+
+  scannerState.adminIdleTimer = window.setTimeout(() => {
+    void handleUserLogout({ dueToInactivity: true });
+  }, remainingMs);
+}
+
+function markAdminActivity({ force = false, syncStorage = true } = {}) {
+  if (pageType !== "admin" || !scannerState.user) return;
+
+  const now = Date.now();
+  const lastActivityAt = Number(scannerState.lastAdminActivityAt) || 0;
+  if (!force && lastActivityAt && now - lastActivityAt < ADMIN_IDLE_ACTIVITY_THROTTLE_MS) {
+    scheduleAdminIdleLogout();
+    return;
+  }
+
+  scannerState.lastAdminActivityAt = now;
+  if (syncStorage) {
+    try {
+      localStorage.setItem(ADMIN_IDLE_ACTIVITY_STORAGE_KEY, String(now));
+    } catch (err) {
+      console.warn("Failed to persist admin activity timestamp", err);
+    }
+  }
+  scheduleAdminIdleLogout();
+}
+
+function syncAdminActivityFromStorage() {
+  if (pageType !== "admin" || !scannerState.user) return;
+
+  try {
+    const raw = localStorage.getItem(ADMIN_IDLE_ACTIVITY_STORAGE_KEY);
+    const storedValue = Number(raw);
+    if (Number.isFinite(storedValue) && storedValue > 0) {
+      scannerState.lastAdminActivityAt = storedValue;
+    }
+  } catch (err) {
+    console.warn("Failed to read admin activity timestamp", err);
+  }
+
+  if (!scannerState.lastAdminActivityAt) {
+    markAdminActivity({ force: true });
+    return;
+  }
+
+  scheduleAdminIdleLogout();
 }
 
 async function startPlanCheckout(plan, button) {
@@ -448,8 +523,9 @@ function openSettingsPanel() {
   window.location.href = "/new/settings.html";
 }
 
-async function handleUserLogout() {
+async function handleUserLogout({ dueToInactivity = false } = {}) {
   const signedInEmail = scannerState.user?.email || "";
+  stopAdminIdleTracking();
   stopHistorySyncPolling();
   await performLogout();
   stopHistoryPlayPlayback({ rerender: false });
@@ -459,7 +535,7 @@ async function handleUserLogout() {
   resetBillingState();
   applyUserState();
   resetEncodeUI();
-  showToast(t("runtime.toast_logged_out"));
+  showToast(dueToInactivity ? t("runtime.toast_logged_out_inactive") : t("runtime.toast_logged_out"));
   if (pageType === "admin") {
     window.location.href = "./index.html";
   }
@@ -767,6 +843,7 @@ function applyUserState() {
     updateLastResultDisplays(last ? last.text : t("runtime.value_none"));
     void syncEncodeHistoryFromServer();
     startHistorySyncPolling();
+    syncAdminActivityFromStorage();
   } else {
     if (dom.encodeInput) {
       dom.encodeInput.value = "";
@@ -785,6 +862,7 @@ function applyUserState() {
     updateDashboardStats();
     updateLastResultDisplays(t("runtime.value_none"));
     stopHistorySyncPolling();
+    stopAdminIdleTracking();
   }
   updateCurrentBadgeVisibility();
   updateOpenLinkButtonState();
@@ -2727,6 +2805,28 @@ function wireEvents() {
   dom.headerLogout?.addEventListener("click", () => {
     void handleUserLogout();
   });
+
+  if (pageType === "admin") {
+    const activityEvents = ["pointerdown", "keydown", "scroll", "touchstart", "input", "focus"];
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(
+        eventName,
+        () => {
+          markAdminActivity();
+        },
+        { passive: true },
+      );
+    });
+
+    window.addEventListener("storage", (event) => {
+      if (event.key !== ADMIN_IDLE_ACTIVITY_STORAGE_KEY || !scannerState.user) return;
+      const nextValue = Number(event.newValue);
+      if (!Number.isFinite(nextValue) || nextValue <= 0) return;
+      scannerState.lastAdminActivityAt = nextValue;
+      scheduleAdminIdleLogout();
+    });
+  }
+
   dom.langSwitchButtons?.forEach((button) => {
     button.addEventListener("click", () => {
       setLanguage(button.dataset.langSwitch || "en");
@@ -2777,12 +2877,14 @@ function wireEvents() {
 
   window.addEventListener("focus", () => {
     if (pageType === "admin" && scannerState.user) {
+      syncAdminActivityFromStorage();
       void syncEncodeHistoryFromServer();
     }
   });
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && pageType === "admin" && scannerState.user) {
+      syncAdminActivityFromStorage();
       void syncEncodeHistoryFromServer();
     }
   });
